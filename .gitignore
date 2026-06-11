@@ -1,0 +1,13 @@
+# Python 一時ファイル
+__pycache__/
+*.pyc
+
+# ローカル状態・回答データ（Firebaseで管理されるため、リポジトリからは除外）
+status.json
+pending_answers.json
+
+# 環境変数など
+.env
+.env.*
+.DS_Store
+Thumbs.db

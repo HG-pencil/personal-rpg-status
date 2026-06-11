@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Status - 人生RPG能力可視化システム</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Press+Start+2P&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Pyodide (Python WASM Engine) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="stars-bg"></div>
+    
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="app-header">
+            <h1 class="logo-text">★ ANTIGRAVITY STATUS ★</h1>
+            <div class="user-meta-header">
+                <span class="user-label">USER:</span>
+                <span id="username" class="user-value">kingo</span>
+                <span id="build-score" class="build-tag">Loading Build...</span>
+            </div>
+        </header>
+
+        <!-- メイングリッド -->
+        <main class="dashboard-grid">
+            
+            <!-- 左カラム: キャラクターカード -->
+            <section class="card character-card glass">
+                <div class="card-header">
+                    <h2 class="section-title">CHARACTER</h2>
+                </div>
+                <div class="avatar-container">
+                    <img id="char-avatar" src="assets/character.png" alt="Character Avatar" class="pixelated-avatar">
+                </div>
+                
+                <div class="combat-power-container">
+                    <div class="cp-label">COMBAT POWER</div>
+                    <div id="combat-power-value" class="cp-value">0</div>
+                </div>
+
+                <div class="hp-section">
+                    <div class="bar-label-container">
+                        <span class="bar-label">HP</span>
+                        <span id="hp-value-text" class="bar-val-text">0/0</span>
+                    </div>
+                    <div class="progress-bar-container hp-bar-bg">
+                        <div id="hp-progress" class="progress-fill hp-fill" style="width: 0%;"></div>
+                    </div>
+                    <div id="hp-condition" class="hp-status-text">Healthy</div>
+                </div>
+
+                <div class="meta-section">
+                    <div class="meta-item">
+                        <span class="meta-label">ACTIVE TITLE</span>
+                        <div id="active-title" class="meta-value">-</div>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">ARCHETYPE</span>
+                        <div id="archetype-value" class="meta-value">-</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右カラム: ステータス＆グラフ -->
+            <section class="card stats-card glass">
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="switchTab('status-tab')">能力ステータス</button>
+                    <button class="tab-btn" onclick="switchTab('items-tab')">アイテム</button>
+                    <button class="tab-btn" onclick="switchTab('chart-tab')">レーダーチャート</button>
+                    <button class="tab-btn" onclick="switchTab('advisory-tab')">GMアドバイス</button>
+                    <button class="tab-btn" onclick="switchTab('test-tab')">ゲート試験</button>
+                </div>
+
+                <!-- ステータスタブ -->
+                <div id="status-tab" class="tab-content active">
+                    <div class="params-list" id="params-container">
+                        <!-- JSで動的に追加 -->
+                    </div>
+                </div>
+
+                <!-- アイテムタブ -->
+                <div id="items-tab" class="tab-content">
+                    <div class="items-grid" id="items-container">
+                        <!-- JSで動的に追加 -->
+                    </div>
+                </div>
+
+                <!-- グラフタブ -->
+                <div id="chart-tab" class="tab-content">
+                    <div class="chart-container">
+                        <canvas id="statusRadarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- GMアドバイス・タブ -->
+                <div id="advisory-tab" class="tab-content">
+                    <div class="advisory-section-web">
+                        <div class="advisory-list-web" id="advisory-list">
+                            <!-- JSで動的に追加 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ゲート試験タブ -->
+                <div id="test-tab" class="tab-content">
+                    <div class="test-tab-container">
+                        <!-- 1. 試験選択ビュー -->
+                        <div id="test-select-view" class="test-view active">
+                            <div class="test-info-header">
+                                <h3 class="test-subtitle">⚡ 挑戦可能なゲート試験 ⚡</h3>
+                                <p class="test-desc-text">能力値がランクの壁に到達すると、対応するゲート試験が解放されます。試験に合格することでパラメータの数値キャップが解放され、キャラクターが進化します。開始すると測定チケットを1枚消費します。</p>
+                            </div>
+                            <div id="test-list-container" class="test-list-grid">
+                                <!-- JSで動的に追加 -->
+                            </div>
+                        </div>
+
+                        <!-- 2. 試験中ビュー -->
+                        <div id="test-active-view" class="test-view">
+                            <div class="test-timer-section">
+                                <div class="timer-meta">
+                                    <span class="timer-label">LIMIT TIME</span>
+                                    <span id="timer-display" class="timer-clock">00:00</span>
+                                </div>
+                                <div class="progress-bar-container timer-bar-bg">
+                                    <div id="timer-progress" class="progress-fill timer-fill" style="width: 100%;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="test-question-box">
+                                <h4 class="question-header">GATE QUESTION</h4>
+                                <div id="test-question-text" class="question-text">
+                                    <!-- JSで問題文を動的に表示 -->
+                                </div>
+                            </div>
+
+                            <div class="test-answer-box">
+                                <textarea id="test-answer-input" placeholder="ここに回答を記述してください...（Ctrl+Enterでも提出できます）" class="test-textarea"></textarea>
+                            </div>
+
+                            <!-- 自動判定結果表示エリア -->
+                            <div id="judge-result-box" style="display: none; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px; font-size: 0.8rem; text-align: left; max-height: 120px; overflow-y: auto; margin-top: 2px;">
+                                <div id="judge-status-header" style="font-weight: bold; margin-bottom: 4px; font-family: var(--font-pixel); font-size: 0.6rem;">JUDGE RESULT</div>
+                                <div id="judge-status-body" style="line-height: 1.4; white-space: pre-wrap; font-family: monospace;"></div>
+                            </div>
+
+                            <div class="test-controls">
+                                <button id="test-abandon-btn" class="btn btn-danger" onclick="abandonTest()">諦める</button>
+                                <button id="test-submit-btn" class="btn btn-primary" onclick="submitTestAnswer()">解答を提出する</button>
+                            </div>
+                        </div>
+
+                        <!-- 3. 試験完了ビュー -->
+                        <div id="test-complete-view" class="test-view">
+                            <div class="test-complete-content">
+                                <div class="complete-icon">📝</div>
+                                <h3 class="complete-title">解答提出完了</h3>
+                                <p class="complete-desc">解答がローカルに保存されました！</p>
+                                <p class="complete-desc-sub" style="color: var(--accent-blue); font-weight: bold; margin-bottom: 8px;">
+                                    📋 チャット送信用の文言がクリップボードにコピーされました！
+                                </p>
+                                <p class="complete-desc-sub" style="margin-bottom: 12px;">
+                                    チャット欄に貼り付けて（Ctrl+V）送信すると、GMの採点が始まります。
+                                </p>
+                                <p class="complete-desc-sub">（自動コピーされない場合は、チャット欄に「採点して」と入力して送信してください）</p>
+                                <button class="btn btn-primary" onclick="resetTestTab()" style="margin-top: 10px;">ステータスに戻る</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- フッター情報 -->
+        <footer class="app-footer glass">
+            <div class="footer-item">
+                <span class="footer-label">最終更新:</span>
+                <span id="last-updated" class="footer-value">-</span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
