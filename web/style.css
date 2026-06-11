@@ -852,3 +852,99 @@ body {
     font-weight: 600;
     margin-left: 6px;
 }
+
+/* ====================================================
+   📱 スマートフォン・タブレット用レスポンシブ対応
+   ==================================================== */
+
+@media (max-width: 850px) {
+    body {
+        overflow-y: auto; /* 縦スクロールを有効化 */
+        align-items: flex-start; /* コンテンツを上寄せ */
+        padding: 15px 0;
+    }
+    
+    .app-container {
+        width: 96%;
+        padding: 5px;
+        gap: 16px;
+    }
+    
+    .tab-content {
+        max-height: none; /* スマホではスクロールエリアにせず全体を展開 */
+        overflow-y: visible;
+        padding-right: 0;
+    }
+
+    .dashboard-grid {
+        gap: 16px;
+    }
+}
+
+@media (max-width: 500px) {
+    .logo-text {
+        font-size: 1.1rem;
+        letter-spacing: 1px;
+    }
+    
+    .user-meta-header {
+        font-size: 0.8rem;
+        padding: 4px 10px;
+    }
+
+    .avatar-container {
+        width: 140px;
+        height: 140px;
+    }
+
+    /* パラメータ項目の比率調整 */
+    .param-item {
+        grid-template-columns: 75px 1fr 85px; /* ラベルと数値の幅を縮小 */
+        gap: 8px;
+    }
+    
+    .param-short {
+        font-size: 0.65rem;
+    }
+    
+    .param-full {
+        font-size: 0.6rem;
+    }
+
+    .val-current {
+        font-size: 0.85rem;
+    }
+
+    .val-peak {
+        font-size: 0.65rem;
+    }
+
+    /* アイテムグリッドの1カラム化 */
+    .items-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* 試験選択カードの縦折り返し */
+    .test-select-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+    
+    .test-select-card .btn {
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+    }
+    
+    .test-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .test-controls .btn {
+        width: 100%;
+        text-align: center;
+    }
+}
