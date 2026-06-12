@@ -4,7 +4,9 @@ import json
 import argparse
 import subprocess
 import time
+import re
 from datetime import datetime
+
 
 # Windows環境での標準出力エンコーディング対策
 if hasattr(sys.stdout, 'reconfigure'):
@@ -21,8 +23,173 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
+def parse_monthly_goals(user_id="kingo"):
+    target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
+    file_path = os.path.join(target_base, user_id, "今月の目標.txt")
+    if not os.path.exists(file_path):
+        return []
+        
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        quests = []
+        step_matches = list(re.finditer(r'(Step \d+:.*?)(?=Step \d+:|$)', content, re.DOTALL))
+        
+        # ターゲットタスクのパターン定義
+        targets = [
+            "投資システムの「撤退基準」と「分散基準」の設定",
+            "最大許容損失額の設定",
+            "分散基準の設定",
+            "「家庭内運用（妻）」のバグ回収フローのスケジュールロック",
+            "大量生ログへの「インデックス付与」ルールの即時適用",
+            "精密検査の予約と受診",
+            "日常メンテナンスの継続",
+            "副業規定と法的リスクの整理",
+            "物理的ブラックボックスの仕様確定（12月完了目標に向けた初動）",
+            "物理的ブラックボックスの仕様確定",
+            "最初の受託案件獲得へ向けた活動",
+            "現場知識の音声ログ蓄積の継続",
+            "「家庭内運用（妻）」のバグ回収フローの定期実行",
+            "「大量生ログ」へのインデックス付与",
+            "投資システムの「撤退基準（Decision Kill Criteria）」の設定"
+        ]
+        
+        if not step_matches:
+            # Step がない場合のフォールバック（改行区切りや単純ターゲットマッチ）
+            found_tasks = []
+            for target in targets:
+                idx = content.find(target)
+                if idx != -1:
+                    found_tasks.append((idx, target))
+            found_tasks.sort()
+            
+            for i in range(len(found_tasks)):
+                start_idx, title = found_tasks[i]
+                end_idx = found_tasks[i+1][0] if i+1 < len(found_tasks) else len(content)
+                desc = content[start_idx + len(title):end_idx].strip()
+                desc = re.sub(r'^[:：\s\-]+', '', desc)
+                
+                status = "pending"
+                if any(x in title or x in desc for x in ["- [x]", "[x]", "（完了）", "(完了)", "【完了】", "（済）", "(済)", "【達成】"]):
+                    status = "completed"
+                    
+                quests.append({
+                    "step": "Monthly Mission",
+                    "title": title,
+                    "description": desc,
+                    "status": status
+                })
+            return quests
+
+        for m in step_matches:
+            step_text = m.group(1).strip()
+            step_header_match = re.match(r'(Step \d+:\s*(?:【[^】]+】)?[^。、「]+)', step_text)
+            step_name = step_header_match.group(1).strip() if step_header_match else "Mission"
+            
+            found_tasks = []
+            for target in targets:
+                idx = step_text.find(target)
+                if idx != -1:
+                    found_tasks.append((idx, target))
+            found_tasks.sort()
+            
+            for i in range(len(found_tasks)):
+                start_idx, title = found_tasks[i]
+                end_idx = found_tasks[i+1][0] if i+1 < len(found_tasks) else len(step_text)
+                desc = step_text[start_idx + len(title):end_idx].strip()
+                desc = re.sub(r'^[:：\s\-]+', '', desc)
+                
+                status = "pending"
+                if any(x in title or x in desc for x in ["- [x]", "[x]", "（完了）", "(完了)", "【完了】", "（済）", "(済)", "【達成】"]):
+                    status = "completed"
+                    
+                quests.append({
+                    "step": step_name,
+                    "title": title,
+                    "description": desc,
+                    "status": status
+                })
+        return quests
+    except Exception as e:
+        print(f"[!] 今月の目標のパースに失敗しました: {e}")
+        return []
+
+def parse_roadmap(user_id="kingo"):
+    target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
+    file_path = os.path.join(target_base, user_id, "ロードマップ.txt")
+    if not os.path.exists(file_path):
+        return {}
+        
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        roadmap = {
+            "title": "HERO ROADMAP",
+            "phases": []
+        }
+        
+        current_phase = None
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("【") and "ロードマップ" in line:
+                roadmap["title"] = line.replace("【", "").replace("】", "")
+                continue
+                
+            phase_match = re.match(r'(第\d+フェーズ.*?)[：:](.*)', line)
+            if phase_match:
+                if current_phase:
+                    roadmap["phases"].append(current_phase)
+                current_phase = {
+                    "name": phase_match.group(1).strip(),
+                    "theme": phase_match.group(2).strip(),
+                    "items": []
+                }
+                continue
+                
+            if current_phase:
+                item_match = re.match(r'([^:：]+)[:：](.*)', line)
+                if item_match:
+                    title = item_match.group(1).strip()
+                    desc = item_match.group(2).strip()
+                    
+                    param_bind = None
+                    if "健康" in title or "シーパップ" in title or "徒歩" in title:
+                        param_bind = "VIT"
+                    elif "ブラックボックス" in title or "自動化" in title:
+                        param_bind = "DEV"
+                    elif "現場知識" in title or "蓄積" in title:
+                        param_bind = "WIS"
+                    elif "撤退基準" in title or "感情" in title or "損切り" in title:
+                        param_bind = "MND"
+                    elif "家庭" in title or "対話" in title or "妻" in title:
+                        param_bind = "CHA"
+                        
+                    current_phase["items"].append({
+                        "title": title,
+                        "description": desc,
+                        "param_bind": param_bind,
+                        "status": "pending"
+                    })
+                else:
+                    if current_phase["items"]:
+                        current_phase["items"][-1]["description"] += " " + line
+                    else:
+                        current_phase["theme"] += " " + line
+                        
+        if current_phase:
+            roadmap["phases"].append(current_phase)
+        return roadmap
+    except Exception as e:
+        print(f"[!] ロードマップのパースに失敗しました: {e}")
+        return {}
+
 def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
+
 
 def pull_from_firestore(user_id="kingo"):
     url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
@@ -92,8 +259,26 @@ def migrate_data(data):
 def load_status(filepath, user_id="kingo"):
     # まずクラウドからのプルを試みる
     cloud_data = pull_from_firestore(user_id)
+    
+    # テキストファイルから目標・ロードマップをパース
+    quests = parse_monthly_goals(user_id)
+    roadmap = parse_roadmap(user_id)
+    
     if cloud_data:
         cloud_data = migrate_data(cloud_data)
+        
+        # 目標・ロードマップをデータにマージ
+        if quests:
+            existing_quests = cloud_data.get("quests", [])
+            completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
+            for q in quests:
+                if q["title"] in completed_titles:
+                    q["status"] = "completed"
+            cloud_data["quests"] = quests
+            
+        if roadmap:
+            cloud_data["roadmap"] = roadmap
+            
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
@@ -108,6 +293,19 @@ def load_status(filepath, user_id="kingo"):
         with open(filepath, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
             local_data = migrate_data(local_data)
+            
+            # オフライン時でもテキストファイルがあればマージ
+            if quests:
+                existing_quests = local_data.get("quests", [])
+                completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
+                for q in quests:
+                    if q["title"] in completed_titles:
+                        q["status"] = "completed"
+                local_data["quests"] = quests
+                
+            if roadmap:
+                local_data["roadmap"] = roadmap
+                
             export_to_notebooklm(local_data, user_id)
             return local_data
     except FileNotFoundError:
@@ -116,6 +314,7 @@ def load_status(filepath, user_id="kingo"):
     except json.JSONDecodeError:
         print(f"エラー: JSONファイルの解析に失敗しました: {filepath}")
         sys.exit(1)
+
 
 def check_achievements(base_path, data):
     ach_filepath = os.path.join(base_path, "web", "status_achievements.json")
