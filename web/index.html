@@ -80,8 +80,10 @@
 
             <!-- 右カラム: ステータス＆グラフ -->
             <section class="card stats-card glass">
-                <div class="tabs-header">
+                <div class="tabs-header" style="flex-wrap: wrap; gap: 4px;">
                     <button class="tab-btn active" onclick="switchTab('status-tab')">能力ステータス</button>
+                    <button class="tab-btn" onclick="switchTab('quest-tab')">今月のクエスト</button>
+                    <button class="tab-btn" onclick="switchTab('roadmap-tab')">ロードマップ</button>
                     <button class="tab-btn" onclick="switchTab('items-tab')">アイテム</button>
                     <button class="tab-btn" onclick="switchTab('chart-tab')">レーダーチャート</button>
                     <button class="tab-btn" onclick="switchTab('advisory-tab')">GMアドバイス</button>
@@ -94,6 +96,30 @@
                         <!-- JSで動的に追加 -->
                     </div>
                 </div>
+
+                <!-- 今月のクエストタブ -->
+                <div id="quest-tab" class="tab-content">
+                    <div class="quest-progress-section" style="margin-bottom: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 6px; font-family: 'Outfit', sans-serif; font-weight: bold; color: var(--accent-blue);">
+                            <span>QUEST COMPLETION RATE</span>
+                            <span id="quest-completion-pct">0% (0/0)</span>
+                        </div>
+                        <div class="progress-bar-container" style="background: rgba(0, 0, 0, 0.4); height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.05);">
+                            <div id="quest-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00d2ff, #00d2ff); box-shadow: 0 0 10px #00d2ff; transition: width 0.5s ease-in-out;"></div>
+                        </div>
+                    </div>
+                    <div class="quests-grid" id="quests-container" style="display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding-right: 5px;">
+                        <!-- JSで動的に追加 -->
+                    </div>
+                </div>
+
+                <!-- ロードマップタブ -->
+                <div id="roadmap-tab" class="tab-content">
+                    <div class="roadmap-timeline" id="roadmap-container" style="display: flex; flex-direction: column; gap: 15px; max-height: 520px; overflow-y: auto; padding-right: 5px; position: relative;">
+                        <!-- JSで動的に追加 -->
+                    </div>
+                </div>
+
 
                 <!-- アイテムタブ -->
                 <div id="items-tab" class="tab-content">
