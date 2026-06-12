@@ -1246,8 +1246,23 @@ body {
 }
 
 @media (max-width: 600px) {
+    .modal-overlay {
+        padding: 0;
+        align-items: flex-start;
+    }
     .modal-content {
-        max-height: 95vh;
+        max-height: 100dvh;
+        height: 100%;
+        border-radius: 0;
+        border: none;
+    }
+    .modal-header {
+        padding-top: calc(16px + env(safe-area-inset-top));
+    }
+    .modal-footer {
+        padding-bottom: calc(14px + env(safe-area-inset-bottom));
+        padding-left: 20px;
+        padding-right: 20px;
     }
     .badges-grid {
         grid-template-columns: 1fr;
