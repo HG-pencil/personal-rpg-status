@@ -29,84 +29,118 @@ def translate_to_quest(raw_title, raw_desc):
     desc = raw_desc
     rank = "C"
     client = "冒険者ギルド"
-    reward = "EXP +100"
     
     # 判定の正規化
     t_norm = raw_title.lower()
+    
+    # 努力値パラメータのデフォルト値（推測用）
+    param = "MND"
     
     # マッピングルール
     if any(x in t_norm for x in ["撤退基準", "最大許容損失", "分散基準", "損切り"]):
         client = "投資審議会"
         rank = "B"
-        reward = "MND +5"
+        param = "MND"
         if "撤退基準" in raw_title:
-            title = "【緊急指令】魔導投資兵器の暴走を抑止せよ！"
-            desc = "投資システムのコア魔導回路に、総資金10%損失時に全ポジションを強制決済する「セーフティゲート（緊急脱出機構）」をハードコーディングせよ。相場の幻惑魔法や感情のデバフに惑わされるな。"
+            title = "【防衛結界】投資の防衛基準ハードコード"
+            desc = "相場からの感情デバフを遮断せよ。総資金10%損失時に全ポジションを強制決済する緊急セーフティと、単一銘柄の保有率を15%以内に抑える分散結界を魔導回路（システム）へ今日実装し、その結果を報告すべし。"
         elif "最大許容損失" in raw_title:
             title = "【防衛戦】最大許容損失額の封印"
-            desc = "総投資資金 of 10%を下回った時点で、感情や独自の相場観を一切無視して全ポジションを強制決済（プラグを抜く）するルールをシステムにハードコーディングせよ。"
+            desc = "総投資資金の10%を下回った時点で、感情や独自の相場観を一切無視して全ポジションを強制決済（プラグを抜く）するルールを今日システムにハードコーディングし、完了報告せよ。"
         elif "分散基準" in raw_title:
             title = "【防御強化】アセット分散結界の構築"
-            desc = "単一の銘柄への集中投資バグを防ぐため、1つのアセット・銘柄への投資割合を総資金の15%以内に制限する物理結界を設定せよ。"
+            desc = "単一の銘柄への集中投資バグを防ぐため、1つのアセット・銘柄への投資割合を総資金の15%以内に制限する物理結界を今日設定し、完了報告せよ。"
             
     elif any(x in t_norm for x in ["家庭内", "妻", "対話"]):
         client = "家庭運営ギルド"
         rank = "A"
-        reward = "CHA +5"
-        title = "【守護指令】聖域（家庭）のバグ回収対話"
-        desc = "毎週日曜日の午前中など、固定で「週次30分」の対話時間をスケジュールに強制ロックせよ。未来の収益化よりも重要な「妻との平穏な生活（聖域）」の崩壊を防ぐためのエラーログ回収作業である。"
+        param = "CHA"
+        title = "【聖域守護】聖域の守護者との対話"
+        desc = "何よりも重要な「平穏な生活（聖域）」を守るため、聖域の守護者（妻）と30分間の対話を今日実行し、家庭の安定度（バグ回収）を確認せよ。その結果を実績報告すべし。"
         
     elif any(x in t_norm for x in ["生ログ", "インデックス"]):
         client = "AI開拓者連盟"
         rank = "C"
-        reward = "DEV +3"
-        title = "【データ解析】大量生ログへのインデックス付与"
-        desc = "NotebookLMへの音声ログ入力時、最後の5秒間で必ず検索用ハッシュタグ（キーワード：重量物、羽田、トラブルなど）を口頭で付与し、未来のAI抽出精度を高めるための仕込みを完了せよ。"
+        param = "DEV"
+        title = "【データ整理】音声ログへのタグ付与"
+        desc = "未来のAI魔導の抽出精度を保つため、本日の音声ログ（NotebookLM用）の末尾5秒に必ず「キーワード：重量物、羽田、トラブル」などの検索用ハッシュタグを口頭で付与して録音を完了し、実績報告せよ。"
         
     elif "精密検査" in raw_title:
         client = "健康管理神殿"
         rank = "S"
-        reward = "VIT +10"
-        title = "【肉体再生】ハードウェア精密デバッグ受診"
-        desc = "肝機能および血中脂質異常のデバッグのため、今月中に必ず内科・消化器内科での精密検査を予約・受診し、プロの神官による診断を完了させよ。"
+        param = "VIT"
+        title = "【肉体診断】健康管理神殿の予約または受診"
+        desc = "健康データの赤信号をデバッグするため、今日中に内科・消化器内科での精密検査の「予約（または受診）」を完了し、その実行結果を報告せよ。"
         
     elif "日常メンテナンス" in raw_title or "徒歩" in raw_title or "シーパップ" in raw_title:
         client = "健康管理神殿"
         rank = "B"
-        reward = "VIT +5"
-        title = "【日常任務】肉体の日常メンテナンス"
-        desc = "毎日1時間の徒歩と、睡眠時無呼吸症候群に対するシーパップ（CPAP）外来の受診を継続し、強制シャットダウンを回避せよ。"
+        param = "VIT"
+        title = "【日常鍛錬】日常メンテナンスの継続"
+        desc = "ハードウェア維持のため、本日「1時間の徒歩鍛錬」および睡眠時の「シーパップ装着」を実行し、正常に完了したことを報告せよ。"
         
     elif "副業規定" in raw_title or "法的リスク" in raw_title:
         client = "防波堤（会社）守備隊"
         rank = "C"
-        reward = "INT +3"
-        title = "【偵察任務】副業規定と法的リスクの調査"
-        desc = "今後の収益化に向けて、勤務先の就業規則（副業規定、競業規定、情報管理規定）を再確認し、潜むリスクと安全な防衛線を整理せよ。"
+        param = "INT"
+        title = "【魔導規則】副業に関する法的リスクの整理"
+        desc = "安全な複線化に向けて、勤務先の就業規則（副業規定、競業規定、情報管理規定）を今日読み直し、潜むリスクと安全な防衛線を整理した実績を報告せよ。"
         
     elif "ブラックボックス" in raw_title:
         client = "AI開拓者連盟"
         rank = "A"
-        reward = "DEV +5"
-        title = "【開拓任務】便利屋化を防ぐブラックボックスの構築"
-        desc = "社内の自動化システムを「私的Googleアカウントを経由しなければ中身が空っぽで動かない設計」にし、自身を不要にするブラックボックスの仕様を策定せよ。"
+        param = "DEV"
+        title = "【防御強化】便利屋化を防ぐブラックボックスの構築"
+        desc = "業務範囲2倍化の危機を防ぐため、社内システムを「私的Googleアカウントを経由しなければ動かない仕様」にするための基本設計（仕様策定）を今日中に1歩進め、その進捗を報告せよ。"
         
     elif "受託案件" in raw_title:
         client = "商業ギルド"
         rank = "A"
-        reward = "WIS +5"
-        title = "【商業任務】最初の受託案件の獲得アクション"
-        desc = "最速でキャッシュを作る手段として、Kintoneツールの外販など、小規模でも良いので「受託案件の最初の1件」を獲得するための初動を開始せよ。"
+        param = "WIS"
+        title = "【商業任務】受託案件獲得アクション"
+        desc = "会社給与以外の収入源を開拓するため、Kintoneツールの外販準備や案件獲得に向けた初動アクションを今日実行し、その取り組み内容を報告せよ。"
         
     elif any(x in t_norm for x in ["音声ログ蓄積", "現場知識", "蓄積"]):
         client = "賢者の塔"
         rank = "B"
-        reward = "WIS +5"
-        title = "【知識伝承】20年の経験が眠る音声ログの蓄積"
-        desc = "重量機工部での現場管理や統括部での収支管理など、20年間の泥臭い経験（最大のコア資産）を、ハッシュタグ付きでNotebookLMに蓄積し続けよ。"
+        param = "WIS"
+        title = "【古代知識】現場経験の音声ログ蓄積"
+        desc = "20年間の泥臭い現場ノウハウをAIデータベースへ組み込むため、本日の現場知識をハッシュタグ付きで音声ログとして録音（NotebookLMへ蓄積）し、完了を報告せよ。"
     else:
         # デフォルト変換
         title = f"【任務】{raw_title}"
+        
+        # タイトルや説明文から適合する努力値パラメータを推測
+        search_text = (title + " " + desc + " " + raw_title + " " + raw_desc).lower()
+        if any(x in search_text for x in ["筋力", "徒歩", "歩行", "運動", "歩く", "str"]):
+            param = "STR"
+        elif any(x in search_text for x in ["健康", "睡眠", "cpap", "シーパップ", "受診", "検査", "内科", "消化器", "vit"]):
+            param = "VIT"
+        elif any(x in search_text for x in ["副業規定", "規則", "法律", "規定", "契約", "法的", "論理", "構造", "int"]):
+            param = "INT"
+        elif any(x in search_text for x in ["知識", "音声", "ログ", "蓄積", "ノウハウ", "教養", "wis"]):
+            param = "WIS"
+        elif any(x in search_text for x in ["投資", "資金", "損失", "基準", "撤退", "損切り", "感情", "規律", "mnd"]):
+            param = "MND"
+        elif any(x in search_text for x in ["妻", "家庭", "家族", "対話", "信頼", "cha"]):
+            param = "CHA"
+        elif any(x in search_text for x in ["システム", "開発", "自動化", "設計", "ブラックボックス", "ai", "開拓", "コード", "dev"]):
+            param = "DEV"
+        else:
+            param = "MND"
+
+    # 難易度（Rank）に応じた努力値ポイント決定
+    points = 3
+    if rank == "S":
+        points = 10
+    elif rank == "A":
+        points = 7
+    elif rank == "B":
+        points = 5
+    elif rank == "C":
+        points = 3
+        
+    reward = f"{param} +{points}"
 
     return {
         "step": f"Rank {rank}",
@@ -142,39 +176,48 @@ def generate_roadmap_events(roadmap, status_data):
                 desc = item.get("description", "")
                 client = "冒険者ギルド"
                 rank = "B"
-                reward = f"{param_bind} +5"
                 
                 # パラメータやキーワードに応じたゲーム風の個別カスタマイズ
                 if param_bind == "VIT" and "健康" in item.get("title", ""):
                     title = "【緊急指令】駆け込め！ホスピタル！！"
                     desc = "体に長年蓄積された毒（BMI・肝機能等の異常魔力）が体を蝕み始めている。今すぐ町の内科に駆け込み、精密検査（デバッグ）を受診せよ！その実績報告をもってクエストクリアとする。"
                     client = "健康管理神殿"
-                    reward = "VIT +10"
-                    rank = "A"
+                    rank = "S"
                 elif param_bind == "DEV" and "ブラックボックス" in item.get("title", ""):
+                    title = "【防衛任務】便利屋化を防ぐブラックボックスの構築"
+                    desc = "人員不足による「業務範囲2倍化リスク」の魔の手が迫っている！社内システムを「私的Googleアカウントを経由しなければ動かない設計」にし、自分を不要にする絶対防御 ofブラックボックス仕様を策定せよ。"
                     title = "【防衛任務】便利屋化を防ぐブラックボックスの構築"
                     desc = "人員不足による「業務範囲2倍化リスク」の魔の手が迫っている！社内システムを「私的Googleアカウントを経由しなければ動かない設計」にし、自分を不要にする絶対防御のブラックボックス仕様を策定せよ。"
                     client = "AI開拓者連盟"
-                    reward = "DEV +10"
                     rank = "S"
                 elif param_bind == "WIS" and "現場知識" in item.get("title", ""):
                     title = "【伝承試練】賢者の音声ログ百連発！"
                     desc = "20年間にわたる重量機工・統括管理の貴重な泥臭い経験（古代の英知）が散逸する危機にある。ハッシュタグ付きで音声ログをNotebookLMにひたすら蓄積し、知識を伝承せよ。"
                     client = "賢者の塔"
-                    reward = "WIS +5"
                     rank = "B"
                 elif param_bind == "MND" and "撤退基準" in item.get("title", ""):
                     title = "【精神試練】幻惑の損切りと絶対撤退規律"
                     desc = "投資における自己規律を試す試練。市場の幻惑魔法を退け、撤退基準（総資金10%損失での強制決済）と分散結界（単一15%以内）の規律を心魂に刻み込め。"
                     client = "投資審議会"
-                    reward = "MND +5"
                     rank = "B"
                 elif param_bind == "CHA" and "家庭" in item.get("title", ""):
                     title = "【守護試練】日常対話による家庭円満結界"
                     desc = "最上位の価値観である家庭の平穏（聖域）を守るための試練。毎週日曜日の午前中など、固定で「週次30分」の対話時間をスケジュールに強制ロックし、バグを未然に回収せよ。"
                     client = "家庭運営ギルド"
-                    reward = "CHA +5"
                     rank = "A"
+                
+                # 難易度（Rank）に応じた努力値ポイント決定
+                points = 5
+                if rank == "S":
+                    points = 10
+                elif rank == "A":
+                    points = 7
+                elif rank == "B":
+                    points = 5
+                elif rank == "C":
+                    points = 3
+                    
+                reward = f"{param_bind} +{points}"
                 
                 events.append({
                     "step": f"Rank {rank}",
@@ -202,21 +245,16 @@ def parse_monthly_goals(user_id="kingo"):
         
         # ターゲットタスクのパターン定義
         targets = [
-            "投資システムの「撤退基準」と「分散基準」の設定",
-            "最大許容損失額の設定",
-            "分散基準の設定",
-            "「家庭内運用（妻）」のバグ回収フローのスケジュールロック",
-            "大量生ログへの「インデックス付与」ルールの即時適用",
-            "精密検査 of予約と受診",
-            "日常メンテナンス of継続",
-            "副業規定と法的リスク of整理",
-            "物理的ブラックボックス of仕様確定（12月完了目標に向けた初動）",
-            "物理的ブラックボックス of仕様確定",
-            "最初の受託案件獲得へ向けた活動",
-            "現場知識 of音声ログ蓄積 of継続",
-            "「家庭内運用（妻）」 ofバグ回収フロー of定期実行",
-            "「大量生ログ」へのインデックス付与",
-            "投資システム of「撤退基準（Decision Kill Criteria）」 of設定"
+            "投資システムの「撤退基準」と「分散基準」の絶対設定",
+            "大量生ログへの「インデックス付与」ルールの徹底",
+            "Discord遠隔操作システムの運用テスト実施",
+            "BOOTH公開ツールの導線作り（情報発信の初動）",
+            "人生RPGツールの自己運用",
+            "ローカルLLM導入交渉とステルス自動化の両立",
+            "Kintone業務自動化の外注管理",
+            "「家庭内運用（妻）」の継続",
+            "健康ハードウェアの保守・データ反映",
+            "片道45分の徒歩通勤と、CPAP治療を確実に継続する"
         ]
         
         if not step_matches:
@@ -434,9 +472,48 @@ def load_status(filepath, user_id="kingo"):
             existing_quests = cloud_data.get("quests", [])
             completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
             completed_originals = {q.get("original_title") for q in existing_quests if q.get("status") == "completed" and q.get("original_title")}
+            
+            history = cloud_data.setdefault("history", [])
+            existing_history_events = {h.get("event") for h in history}
+            training = cloud_data.setdefault("training", {p: 0 for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]})
+            tickets = cloud_data.setdefault("tickets", {})
+            
             for q in all_quests:
                 if q["title"] in completed_titles or q.get("original_title") in completed_originals:
                     q["status"] = "completed"
+                    
+                # 報酬の自動付与（新しく完了になったクエスト）
+                if q["status"] == "completed":
+                    event_key = f"Quest Completed: {q['title']} (Reward: {q['reward']})"
+                    if event_key not in existing_history_events:
+                        # 報酬の解析（例: "VIT +10"）
+                        reward_str = q.get("reward", "")
+                        match = re.search(r'([A-Z]+)\s*\+?\s*(\d+)', reward_str)
+                        if match:
+                            param = match.group(1)
+                            val = int(match.group(2))
+                            if param in training:
+                                old_val = training[param]
+                                training[param] += val
+                                new_val = training[param]
+                                
+                                # チケットの自動獲得判定
+                                tickets_earned = (new_val // 100) - (old_val // 100)
+                                if tickets_earned > 0:
+                                    tickets[param] = tickets.get(param, 0) + tickets_earned
+                                    history.append({
+                                        "date": datetime.now().strftime("%Y-%m-%d"),
+                                        "event": f"Measurement Ticket ({param}) Obtained by Training Points (Accumulated: {new_val}pts)",
+                                        "status_change": {}
+                                    })
+                                    
+                        # 履歴に追加して重複を防止
+                        history.append({
+                            "date": datetime.now().strftime("%Y-%m-%d"),
+                            "event": event_key,
+                            "status_change": {}
+                        })
+                        
             cloud_data["quests"] = all_quests
             
         if roadmap:
@@ -467,9 +544,45 @@ def load_status(filepath, user_id="kingo"):
                 existing_quests = local_data.get("quests", [])
                 completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
                 completed_originals = {q.get("original_title") for q in existing_quests if q.get("status") == "completed" and q.get("original_title")}
+                
+                history = local_data.setdefault("history", [])
+                existing_history_events = {h.get("event") for h in history}
+                training = local_data.setdefault("training", {p: 0 for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]})
+                tickets = local_data.setdefault("tickets", {})
+                
                 for q in all_quests:
                     if q["title"] in completed_titles or q.get("original_title") in completed_originals:
                         q["status"] = "completed"
+                        
+                    # 報酬の自動付与（オフライン用）
+                    if q["status"] == "completed":
+                        event_key = f"Quest Completed: {q['title']} (Reward: {q['reward']})"
+                        if event_key not in existing_history_events:
+                            reward_str = q.get("reward", "")
+                            match = re.search(r'([A-Z]+)\s*\+?\s*(\d+)', reward_str)
+                            if match:
+                                param = match.group(1)
+                                val = int(match.group(2))
+                                if param in training:
+                                    old_val = training[param]
+                                    training[param] += val
+                                    new_val = training[param]
+                                    
+                                    tickets_earned = (new_val // 100) - (old_val // 100)
+                                    if tickets_earned > 0:
+                                        tickets[param] = tickets.get(param, 0) + tickets_earned
+                                        history.append({
+                                            "date": datetime.now().strftime("%Y-%m-%d"),
+                                            "event": f"Measurement Ticket ({param}) Obtained by Training Points (Accumulated: {new_val}pts)",
+                                            "status_change": {}
+                                        })
+                                        
+                            history.append({
+                                "date": datetime.now().strftime("%Y-%m-%d"),
+                                "event": event_key,
+                                "status_change": {}
+                            })
+                            
                 local_data["quests"] = all_quests
                 
             if roadmap:
