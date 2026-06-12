@@ -5,7 +5,10 @@ import os
 import webbrowser
 import sys
 import socket
+import re
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
+
 
 # Windows環境での標準出力エンコーディング対策
 if hasattr(sys.stdout, 'reconfigure'):
@@ -35,9 +38,24 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        parsed_path = urlparse(self.path)
+        api_path = parsed_path.path
+        query = parse_qs(parsed_path.query)
+        user_id = query.get('user', ['kingo'])[0]
+        
+        # 安全なユーザーIDバリデーション
+        if not re.match(r'^[a-zA-Z0-9_-]+$', user_id):
+            user_id = "kingo"
+
         # APIエンドポイントのハンドリング
-        if self.path == '/api/status':
-            status_path = os.path.join(DIRECTORY, 'status.json')
+        if api_path == '/api/status':
+            status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
+            if not os.path.exists(status_path) and user_id == "kingo":
+                # 従来ファイルへのフォールバック
+                fallback_path = os.path.join(DIRECTORY, 'status.json')
+                if os.path.exists(fallback_path):
+                    status_path = fallback_path
+            
             if os.path.exists(status_path):
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -46,8 +64,8 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 with open(status_path, 'r', encoding='utf-8') as f:
                     self.wfile.write(f.read().encode('utf-8'))
             else:
-                self.send_error(404, "status.json not found")
-        elif self.path == '/api/tests':
+                self.send_error(404, f"status_{user_id}.json not found")
+        elif api_path == '/api/tests':
             tests_path = os.path.join(DIRECTORY, 'status_tests.json')
             if os.path.exists(tests_path):
                 self.send_response(200)
@@ -59,17 +77,37 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_error(404, "status_tests.json not found")
         else:
-            # 静的ファイルのパス解決
-            if self.path == '/' or self.path == '':
-                self.path = '/web/index.html'
-            elif not self.path.startswith('/web/') and not self.path.startswith('/assets/'):
-                self.path = '/web' + self.path
+            # 静的ファイルのパス解決（プレフィックス補正）
+            clean_path = api_path
+            
+            if clean_path == '/' or clean_path == '':
+                new_path = '/web/index.html'
+            elif not clean_path.startswith('/web/') and not clean_path.startswith('/assets/'):
+                new_path = '/web' + clean_path
+            else:
+                new_path = clean_path
+                
+            # クエリ部分を再結合
+            if parsed_path.query:
+                self.path = new_path + '?' + parsed_path.query
+            else:
+                self.path = new_path
                 
             super().do_GET()
 
+
     def do_POST(self):
+        parsed_path = urlparse(self.path)
+        api_path = parsed_path.path
+        query = parse_qs(parsed_path.query)
+        user_id = query.get('user', ['kingo'])[0]
+        
+        # 安全なユーザーIDバリデーション
+        if not re.match(r'^[a-zA-Z0-9_-]+$', user_id):
+            user_id = "kingo"
+
         # 試験回答提出 API エンドポイント
-        if self.path == '/api/submit_test':
+        if api_path == '/api/submit_test':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             
@@ -89,8 +127,8 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # メタデータ付与
                 submitted_answer["submitted_at"] = datetime.now().isoformat()
                 
-                # pending_answers.json に保存
-                pending_path = os.path.join(DIRECTORY, 'pending_answers.json')
+                # pending_answers_{user_id}.json に保存
+                pending_path = os.path.join(DIRECTORY, f'pending_answers_{user_id}.json')
                 pending_data = []
                 if os.path.exists(pending_path):
                     try:
@@ -104,8 +142,13 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 with open(pending_path, 'w', encoding='utf-8') as f:
                     json.dump(pending_data, f, ensure_ascii=False, indent=2)
                 
-                # 測定チケットの消費 ＆ status.json 履歴更新
-                status_path = os.path.join(DIRECTORY, 'status.json')
+                # 測定チケットの消費 ＆ status_{user_id}.json 履歴更新
+                status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
+                if not os.path.exists(status_path) and user_id == "kingo":
+                    fallback_path = os.path.join(DIRECTORY, 'status.json')
+                    if os.path.exists(fallback_path):
+                        status_path = fallback_path
+                        
                 if os.path.exists(status_path):
                     with open(status_path, 'r', encoding='utf-8') as f:
                         status_data = json.load(f)
@@ -134,7 +177,8 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     status_data["last_updated"] = datetime.now().isoformat()
                     
-                    with open(status_path, 'w', encoding='utf-8') as f:
+                    save_status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
+                    with open(save_status_path, 'w', encoding='utf-8') as f:
                         json.dump(status_data, f, ensure_ascii=False, indent=2)
                 
                 # レスポンス返却
@@ -151,7 +195,7 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "error", "message": f"Server error: {str(e)}"}).encode('utf-8'))
-        elif self.path == '/api/judge_training':
+        elif api_path == '/api/judge_training':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             
@@ -227,8 +271,13 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 passed = actual_lines == expected_lines
                 
                 if passed:
-                    # チケット回復 ＆ status.json 履歴更新
-                    status_path = os.path.join(DIRECTORY, 'status.json')
+                    # チケット回復 ＆ status_{user_id}.json 履歴更新
+                    status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
+                    if not os.path.exists(status_path) and user_id == "kingo":
+                        fallback_path = os.path.join(DIRECTORY, 'status.json')
+                        if os.path.exists(fallback_path):
+                            status_path = fallback_path
+                            
                     if os.path.exists(status_path):
                         with open(status_path, 'r', encoding='utf-8') as f:
                             status_data = json.load(f)
@@ -246,7 +295,8 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                         
                         status_data["last_updated"] = datetime.now().isoformat()
                         
-                        with open(status_path, 'w', encoding='utf-8') as f:
+                        save_status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
+                        with open(save_status_path, 'w', encoding='utf-8') as f:
                             json.dump(status_data, f, ensure_ascii=False, indent=2)
                 
                 # 結果をレスポンス
