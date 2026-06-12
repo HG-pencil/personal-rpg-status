@@ -63,6 +63,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// クライアントサイドでのデータマイグレーション
+function migrateStatusData(data) {
+    if (!data) return data;
+    let modified = false;
+    if (!data.unlocked_achievements) {
+        data.unlocked_achievements = [];
+        modified = true;
+    }
+    if (!data.title_parts) {
+        data.title_parts = [];
+        modified = true;
+    }
+    if (!data.custom_title) {
+        data.custom_title = "";
+        modified = true;
+    }
+    if (!data.active_title_parts) {
+        data.active_title_parts = [];
+        modified = true;
+    }
+    
+    // 初期実績の自動付与
+    if (!data.unlocked_achievements.includes("ACH_FIRST_STEP")) {
+        data.unlocked_achievements.push("ACH_FIRST_STEP");
+        const defaultWords = ["目覚めし人", "の"];
+        defaultWords.forEach(word => {
+            if (!data.title_parts.includes(word)) {
+                data.title_parts.push(word);
+            }
+        });
+        modified = true;
+    }
+    
+    // 変更があった場合はバックグラウンドでFirestoreへ書き戻し
+    if (modified) {
+        userDocRef.update({
+            status_json: JSON.stringify(data)
+        }).then(() => {
+            console.log("Firestore data successfully migrated on client side.");
+        }).catch(err => {
+            console.error("Failed to auto-migrate Firestore data on client:", err);
+        });
+    }
+    return data;
+}
+
 // Firebase Firestore からデータをフェッチ
 function fetchStatusData() {
     return userDocRef.get()
@@ -70,7 +116,8 @@ function fetchStatusData() {
             if (!doc.exists) {
                 throw new Error('クラウド上にデータが見つかりませんでした');
             }
-            const data = JSON.parse(doc.data().status_json);
+            let data = JSON.parse(doc.data().status_json);
+            data = migrateStatusData(data); // クライアントサイド・マイグレーションの実行
             cachedStatusData = data; // キャッシュに保持
             updateUI(data);
             initRadarChart(data);
