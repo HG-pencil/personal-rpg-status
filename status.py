@@ -282,11 +282,12 @@ def load_status(filepath, user_id="kingo"):
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
-            export_to_notebooklm(cloud_data, user_id)
-            return cloud_data
-        except Exception:
-            export_to_notebooklm(cloud_data, user_id)
-            return cloud_data
+        except Exception as e:
+            print(f"[!] ローカルキャッシュの保存に失敗しました: {e}")
+            
+        export_to_notebooklm(cloud_data, user_id)
+        push_to_firestore(cloud_data, user_id)
+        return cloud_data
             
     # クラウドがオフラインならローカルキャッシュからロード
     try:
