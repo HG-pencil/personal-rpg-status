@@ -4,7 +4,10 @@ __pycache__/
 
 # ローカル状態・回答データ（Firebaseで管理されるため、リポジトリからは除外）
 status.json
+status_*.json
 pending_answers.json
+pending_answers_*.json
+
 
 # 環境変数など
 .env
