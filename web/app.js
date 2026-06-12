@@ -196,7 +196,12 @@ function updateUI(data) {
     
     // GMアドバイスの描画
     renderAdvisories(data);
+    
+    // クエストとロードマップの描画
+    renderQuests(data);
+    renderRoadmap(data);
 }
+
 
 function renderItems(data) {
     const itemsContainer = document.getElementById('items-container');
@@ -1087,6 +1092,8 @@ function switchTab(tabId) {
     
     const activeBtn = Array.from(buttons).find(btn => 
         (tabId === 'status-tab' && btn.innerText.includes('能力ステータス')) ||
+        (tabId === 'quest-tab' && btn.innerText.includes('今月のクエスト')) ||
+        (tabId === 'roadmap-tab' && btn.innerText.includes('ロードマップ')) ||
         (tabId === 'items-tab' && btn.innerText.includes('アイテム')) ||
         (tabId === 'chart-tab' && btn.innerText.includes('レーダーチャート')) ||
         (tabId === 'advisory-tab' && btn.innerText.includes('GMアドバイス')) ||
@@ -1102,8 +1109,13 @@ function switchTab(tabId) {
         }, 50);
     } else if (tabId === 'test-tab') {
         loadAvailableTests();
+    } else if (tabId === 'quest-tab') {
+        renderQuests(cachedStatusData);
+    } else if (tabId === 'roadmap-tab') {
+        renderRoadmap(cachedStatusData);
     }
 }
+
 
 // ----------------------------------------------------
 // 🏆 アチーブメント＆称号カスタマイズモーダル
@@ -1498,4 +1510,141 @@ function createNewUser() {
         }
     });
 }
+
+function renderQuests(data) {
+    const container = document.getElementById('quests-container');
+    const pctText = document.getElementById('quest-completion-pct');
+    const progressBar = document.getElementById('quest-progress-bar');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const quests = data.quests || [];
+    if (quests.length === 0) {
+        container.innerHTML = '<div class="advisory-item-web">今月の目標（クエスト）が設定されていません。</div>';
+        if (pctText) pctText.innerText = "0% (0/0)";
+        if (progressBar) progressBar.style.width = "0%";
+        return;
+    }
+    
+    let completedCount = 0;
+    
+    quests.forEach(q => {
+        const isCompleted = q.status === 'completed';
+        if (isCompleted) {
+            completedCount++;
+        }
+        
+        const questHtml = `
+            <div class="quest-card ${isCompleted ? 'completed' : ''}" style="background: rgba(0, 0, 0, 0.4); border: 1px solid ${isCompleted ? 'rgba(46, 213, 115, 0.3)' : 'rgba(255, 255, 255, 0.08)'}; border-radius: 8px; padding: 12px; display: flex; align-items: flex-start; gap: 12px; transition: all 0.2s; box-shadow: ${isCompleted ? '0 0 10px rgba(46, 213, 115, 0.05)' : 'none'};">
+                <input type="checkbox" ${isCompleted ? 'checked' : ''} disabled style="margin-top: 3px; pointer-events: none; width: 16px; height: 16px; accent-color: #2ed573; cursor: default;">
+                <div style="flex: 1; text-align: left;">
+                    <div style="font-size: 0.65rem; color: var(--text-secondary); margin-bottom: 2px; font-family: 'Outfit', sans-serif;">${q.step}</div>
+                    <div style="font-size: 0.85rem; font-weight: bold; color: ${isCompleted ? '#747d8c' : '#fff'}; text-decoration: ${isCompleted ? 'line-through' : 'none'}; font-family: 'Noto Sans JP', sans-serif;">${q.title}</div>
+                    ${q.description ? `<div style="font-size: 0.75rem; color: ${isCompleted ? '#57606f' : 'var(--text-secondary)'}; margin-top: 6px; line-height: 1.4; white-space: pre-wrap; font-family: 'Noto Sans JP', sans-serif;">${q.description}</div>` : ''}
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', questHtml);
+    });
+    
+    const totalCount = quests.length;
+    const pct = Math.round((completedCount / totalCount) * 100);
+    
+    if (pctText) {
+        pctText.innerText = `${pct}% (${completedCount}/${totalCount})`;
+    }
+    if (progressBar) {
+        progressBar.style.width = `${pct}%`;
+        if (pct === 100) {
+            progressBar.style.background = "linear-gradient(90deg, #2ed573, #2ed573)";
+            progressBar.style.boxShadow = "0 0 10px #2ed573";
+        } else {
+            progressBar.style.background = "linear-gradient(90deg, #00d2ff, #00d2ff)";
+            progressBar.style.boxShadow = "0 0 10px #00d2ff";
+        }
+    }
+}
+
+function renderRoadmap(data) {
+    const container = document.getElementById('roadmap-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const roadmap = data.roadmap;
+    if (!roadmap || !roadmap.phases || roadmap.phases.length === 0) {
+        container.innerHTML = '<div class="advisory-item-web">ロードマップが設定されていません。</div>';
+        return;
+    }
+    
+    // ロードマップタイトル表示
+    const titleHtml = `
+        <div style="text-align: center; margin-bottom: 10px;">
+            <h3 style="font-family: var(--font-pixel); font-size: 0.85rem; color: var(--timer-yellow); text-shadow: 0 0 8px rgba(255, 211, 44, 0.3); margin: 0;">⚡ ${roadmap.title} ⚡</h3>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', titleHtml);
+    
+    roadmap.phases.forEach((phase, idx) => {
+        let phaseItemsHtml = '';
+        
+        if (phase.items && phase.items.length > 0) {
+            phase.items.forEach(item => {
+                let isCompleted = false;
+                let bindVal = null;
+                let statusText = 'PENDING';
+                let statusColor = 'var(--text-secondary)';
+                let statusBg = 'rgba(255, 255, 255, 0.05)';
+                
+                if (item.param_bind && data.status[item.param_bind]) {
+                    const currVal = data.status[item.param_bind].current;
+                    bindVal = currVal;
+                    
+                    const threshold = item.param_bind === 'CHA' ? 280 : 300;
+                    isCompleted = currVal >= threshold;
+                    
+                    if (isCompleted) {
+                        statusText = 'CLEAR';
+                        statusColor = 'var(--hp-green)';
+                        statusBg = 'rgba(46, 213, 115, 0.15)';
+                    } else {
+                        statusText = `PROGRESS (${currVal}/${threshold})`;
+                        statusColor = 'var(--accent-blue)';
+                        statusBg = 'rgba(0, 210, 255, 0.1)';
+                    }
+                }
+                
+                phaseItemsHtml += `
+                    <div class="roadmap-item-card" style="border-left: 3px solid ${isCompleted ? 'var(--hp-green)' : (item.param_bind ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.15)')}; background: rgba(0, 0, 0, 0.3); padding: 10px 12px; border-radius: 0 6px 6px 0; text-align: left; transition: all 0.2s;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+                            <span style="font-size: 0.8rem; font-weight: bold; color: ${isCompleted ? '#fff' : '#d2d2d2'}; font-family: 'Noto Sans JP', sans-serif;">${item.title}</span>
+                            <span style="font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; font-weight: bold; font-family: 'Outfit', sans-serif; background: ${statusBg}; color: ${statusColor}; box-shadow: ${isCompleted ? '0 0 5px rgba(46, 213, 115, 0.1)' : 'none'};">
+                                ${statusText}
+                            </span>
+                        </div>
+                        <p style="font-size: 0.7rem; color: ${isCompleted ? '#747d8c' : 'var(--text-secondary)'}; line-height: 1.45; margin: 0; font-family: 'Noto Sans JP', sans-serif;">${item.description}</p>
+                    </div>
+                `;
+            });
+        } else {
+            phaseItemsHtml = '<div style="font-size: 0.7rem; color: var(--text-secondary); text-align: left; padding: 5px;">マイルストーン未定義</div>';
+        }
+        
+        const phaseHtml = `
+            <div class="roadmap-phase" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 15px; text-align: left; transition: all 0.2s;">
+                <div style="font-family: var(--font-pixel); font-size: 0.65rem; color: var(--timer-yellow); margin-bottom: 4px;">PHASE ${idx + 1}</div>
+                <div style="font-size: 0.75rem; font-weight: bold; color: #fff; margin-bottom: 12px; font-family: 'Outfit', 'Noto Sans JP', sans-serif; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; line-height: 1.4;">
+                    <span style="color: var(--accent-blue);">${phase.name}</span><br>
+                    <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: normal; display: inline-block; margin-top: 4px;">${phase.theme}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    ${phaseItemsHtml}
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', phaseHtml);
+    });
+}
+
 
