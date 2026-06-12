@@ -143,20 +143,44 @@ function renderItems(data) {
     
     const tickets = data.tickets || {};
     
-    // 1. 測定チケットの表示
-    if (tickets.measurement !== undefined) {
-        const ticketHtml = `
-            <div class="item-card">
-                <div class="item-icon">🎫</div>
-                <div class="item-info">
-                    <div class="item-name">測定チケット</div>
-                    <div class="item-desc">能力値の測定（ランクゲート試験）に挑戦するためのチケット。</div>
+    const ticketNames = {
+        "all": "測定チケット (all)",
+        "STR": "測定チケット (STR)",
+        "VIT": "測定チケット (VIT)",
+        "INT": "測定チケット (INT)",
+        "WIS": "測定チケット (WIS)",
+        "MND": "測定チケット (MND)",
+        "CHA": "測定チケット (CHA)",
+        "DEV": "測定チケット (DEV)"
+    };
+    const ticketDescs = {
+        "all": "すべてのステータスの昇段（ゲート）試験に挑戦可能な万能の測定チケット。",
+        "STR": "STR（筋力・身体出力）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。",
+        "VIT": "VIT（持久力・疲労耐性）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。",
+        "INT": "INT（論理思考・構造化）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。",
+        "WIS": "WIS（知識・教養）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。",
+        "MND": "MND（精神力・自己統制）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。",
+        "CHA": "CHA（魅力・信頼形成）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。",
+        "DEV": "DEV（開拓・AIシステム構築）の昇段（ゲート）試験にのみ挑戦可能な専用の測定チケット。"
+    };
+
+    // tickets内の所持数が1以上のチケットをループ表示
+    Object.keys(tickets).forEach(key => {
+        const count = tickets[key];
+        if (count > 0 && ticketNames[key]) {
+            const ticketHtml = `
+                <div class="item-card">
+                     <div class="item-icon">${key === "all" ? "🎫" : "🎟️"}</div>
+                     <div class="item-info">
+                         <div class="item-name">${ticketNames[key]}</div>
+                         <div class="item-desc">${ticketDescs[key]}</div>
+                     </div>
+                     <div class="item-count">x${count}</div>
                 </div>
-                <div class="item-count">x${tickets.measurement}</div>
-            </div>
-        `;
-        itemsContainer.insertAdjacentHTML('beforeend', ticketHtml);
-    }
+            `;
+            itemsContainer.insertAdjacentHTML('beforeend', ticketHtml);
+        }
+    });
 }
 
 function renderAdvisories(data) {
@@ -445,22 +469,31 @@ function loadAvailableTests() {
     if (!cachedStatusData) return;
     
     const status = cachedStatusData.status;
-    const tickets = cachedStatusData.tickets || { measurement: 0 };
-    const measurementTickets = tickets.measurement || 0;
+    const tickets = cachedStatusData.tickets || {};
+    
+    // 所持しているすべての種類のチケットの合計数を算出
+    const totalTickets = (tickets.all || 0) + 
+                         (tickets.STR || 0) + 
+                         (tickets.VIT || 0) + 
+                         (tickets.INT || 0) + 
+                         (tickets.WIS || 0) + 
+                         (tickets.MND || 0) + 
+                         (tickets.CHA || 0) + 
+                         (tickets.DEV || 0);
     
     const container = document.getElementById('test-list-container');
     if (!container) return;
     container.innerHTML = ''; // クリア
     
-    // チケットが不足している場合
-    if (measurementTickets <= 0) {
+    // チケットが完全に不足している場合（専用もallも全て0）
+    if (totalTickets <= 0) {
         // チケット不足警告と回復ミッションセクションを表示
         container.innerHTML = `
             <div class="item-card" style="border-color: var(--accent-red-dim); background: rgba(255, 71, 87, 0.02); padding: 16px; text-align: center; display: block; width: 100%; margin-bottom: 15px;">
                 <div style="font-size: 1.8rem; margin-bottom: 4px;">🎫 ❌</div>
                 <div style="font-weight: bold; font-size: 0.9rem; color: #ffffff; margin-bottom: 4px;">測定チケットが不足しています</div>
                 <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
-                    通常のゲート試験を受けるにはチケットが必要です。<br>
+                    通常のゲート試験を受けるには、対応するステータスの専用チケットまたはallチケットが必要です。<br>
                     以下の「チケット回復ミッション（追試）」を達成してチケットを復旧させましょう！
                 </div>
             </div>
@@ -525,16 +558,25 @@ function loadAvailableTests() {
                     availableCount++;
                     const timeMin = test.time_limit_seconds / 60;
                     
+                    const hasSpecific = tickets[param] && tickets[param] > 0;
+                    const hasAll = tickets.all && tickets.all > 0;
+                    const hasTicket = hasSpecific || hasAll;
+                    
+                    const ticketStatusHtml = hasTicket 
+                        ? `<span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能</span>` 
+                        : `<span class="meta-diff" style="color: var(--accent-red);">チケット不足</span>`;
+                    
                     const cardHtml = `
-                        <div class="test-select-card">
+                        <div class="test-select-card" style="${!hasTicket ? 'opacity: 0.6; border-color: rgba(255,255,255,0.02);' : ''}">
                             <div class="test-card-left">
                                 <div class="test-card-title">${param} -> ${targetGate} ゲート試験</div>
                                 <div class="test-card-meta">
                                     <span>難易度: <span class="meta-diff">${test.difficulty}</span></span>
                                     <span>制限時間: <span class="meta-time">${timeMin} 分</span></span>
+                                    <span>状態: ${ticketStatusHtml}</span>
                                 </div>
                             </div>
-                            <button class="btn btn-primary" onclick="startTest('${test.id}')">試験開始</button>
+                            <button class="btn btn-primary" ${!hasTicket ? 'disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed;"' : ''} onclick="startTest('${test.id}')">試験開始</button>
                         </div>
                     `;
                     container.insertAdjacentHTML('beforeend', cardHtml);
@@ -555,11 +597,6 @@ function startTest(testId) {
     if (!cachedStatusData) return;
     
     const isTrainingTask = testId.startsWith("TRAIN-");
-    const tickets = cachedStatusData.tickets || { measurement: 0 };
-    if (!isTrainingTask && (tickets.measurement || 0) <= 0) {
-        alert("測定チケットがありません！");
-        return;
-    }
 
     fetch('status_tests.json')
         .then(res => res.json())
@@ -568,6 +605,18 @@ function startTest(testId) {
             if (!test) {
                 alert("指定された試験が見つかりません。");
                 return;
+            }
+            
+            // チケットの有無チェック (追試ミッションでない場合)
+            if (!isTrainingTask) {
+                const tickets = cachedStatusData.tickets || {};
+                const param = test.param;
+                const hasSpecific = tickets[param] && tickets[param] > 0;
+                const hasAll = tickets.all && tickets.all > 0;
+                if (!hasSpecific && !hasAll) {
+                    alert(`測定チケット（${param}）または測定チケット（all）が不足しています！`);
+                    return;
+                }
             }
             
             activeTest = test;
@@ -664,10 +713,14 @@ function submitTestAnswer(isTimeout = false) {
     // 現在のキャッシュデータをコピーして書き換え
     const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
     
-    // チケット消費
-    const currTickets = updatedData.tickets?.measurement || 0;
-    if (currTickets > 0) {
-        updatedData.tickets.measurement = currTickets - 1;
+    // チケット消費（優先度：専用 ➡️ all）
+    const param = activeTest.param;
+    if (updatedData.tickets) {
+        if (updatedData.tickets[param] && updatedData.tickets[param] > 0) {
+            updatedData.tickets[param]--;
+        } else if (updatedData.tickets.all && updatedData.tickets.all > 0) {
+            updatedData.tickets.all--;
+        }
     }
     
     const elapsed = testSecondsTotal - testSecondsRemaining;
@@ -745,10 +798,14 @@ function abandonTest() {
     
     const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
     
-    // チケット消費
-    const currTickets = updatedData.tickets?.measurement || 0;
-    if (currTickets > 0) {
-        updatedData.tickets.measurement = currTickets - 1;
+    // チケット消費（優先度：専用 ➡️ all）
+    const param = activeTest.param;
+    if (updatedData.tickets) {
+        if (updatedData.tickets[param] && updatedData.tickets[param] > 0) {
+            updatedData.tickets[param]--;
+        } else if (updatedData.tickets.all && updatedData.tickets.all > 0) {
+            updatedData.tickets.all--;
+        }
     }
     
     const elapsed = testSecondsTotal - testSecondsRemaining;

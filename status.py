@@ -66,10 +66,20 @@ def push_to_firestore(data):
         print(f"[!] クラウドへのデータ同期に失敗しました: {e}")
     return False
 
+def migrate_tickets(data):
+    if not data:
+        return data
+    tickets = data.setdefault("tickets", {})
+    # 古い measurement キーがあれば all に変換して削除
+    if "measurement" in tickets:
+        tickets["all"] = tickets.get("all", 0) + tickets.pop("measurement", 0)
+    return data
+
 def load_status(filepath):
     # まずクラウドからのプルを試みる
     cloud_data = pull_from_firestore()
     if cloud_data:
+        cloud_data = migrate_tickets(cloud_data)
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
@@ -80,7 +90,8 @@ def load_status(filepath):
     # クラウドがオフラインならローカルキャッシュからロード
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            local_data = json.load(f)
+            return migrate_tickets(local_data)
     except FileNotFoundError:
         print(f"エラー: データファイルが見つかりません: {filepath}")
         sys.exit(1)
@@ -271,8 +282,11 @@ def import_training_data(base_path, data, json_str):
     training = data.setdefault("training", {p: 0 for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]})
     status = data.setdefault("status", {})
     hp = status.setdefault("HP", {"current": 70, "max": 100})
-    tickets = data.setdefault("tickets", {"measurement": 0})
+    tickets = data.setdefault("tickets", {})
     history = data.setdefault("history", [])
+
+    # 初期トレーニング累積値のコピーを作成
+    initial_training = {p: training.get(p, 0) for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]}
 
     results = []
     new_points_total = 0
@@ -311,7 +325,6 @@ def import_training_data(base_path, data, json_str):
 
         reflected_dates.append(date)
         new_points_total += daily_points
-        accumulated_points += daily_points
 
         # 履歴追加
         pts_str = ", ".join([f"{k}+{v}" for k, v in added_points.items() if v > 0])
@@ -324,22 +337,26 @@ def import_training_data(base_path, data, json_str):
 
         results.append(f"反映成功: {date} ({pts_str}) - {summary}")
 
-    # チケット回復判定 (100ポイント毎)
-    tickets_earned = 0
-    if accumulated_points >= 100:
-        tickets_earned = accumulated_points // 100
-        accumulated_points = accumulated_points % 100
+    # 各ステータスごとに、100ポイント毎のチケット回復判定を行う
+    tickets_earned_msg = []
+    for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]:
+        old_val = initial_training[p]
+        new_val = training.get(p, 0)
         
-        old_tickets = tickets.get("measurement", 0)
-        tickets["measurement"] = min(1, old_tickets + tickets_earned) # 上限1枚
-        
-        history.append({
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "event": f"Measurement Ticket Recovered by Training Points (Accumulated: {new_points_total}pts)",
-            "status_change": {}
-        })
+        tickets_earned = (new_val // 100) - (old_val // 100)
+        if tickets_earned > 0:
+            old_tickets = tickets.get(p, 0)
+            tickets[p] = old_tickets + tickets_earned
+            
+            history.append({
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "event": f"Measurement Ticket ({p}) Obtained by Training Points (Accumulated: {new_val}pts)",
+                "status_change": {}
+            })
+            tickets_earned_msg.append(f"[🎉 チケット獲得] {p}のトレーニング値が {new_val}pts に到達！「測定チケット({p})」を {tickets_earned}枚 獲得しました！")
 
-    data["accumulated_training_points"] = accumulated_points
+    # 旧合算カウンターは廃止しリセット
+    data["accumulated_training_points"] = 0
     data["last_updated"] = datetime.now().isoformat()
 
     # 保存
@@ -353,9 +370,8 @@ def import_training_data(base_path, data, json_str):
         print(f" - {r}")
     print("----------------------------------------------------------------------")
     print(f" 新規累積ポイント: +{new_points_total} pts")
-    print(f" チケット回復累積カウンター: {accumulated_points}/100 pts")
-    if tickets_earned > 0:
-        print(" [🎉 チケット回復] 測定チケットが1枚に復旧しました！")
+    for msg in tickets_earned_msg:
+        print(f" {msg}")
     if hp_recovered_total > 0:
         print(f" [❤️ HP回復] 体調が整い、HPが {hp_recovered_total} 回復しました！(現在: {hp['current']}/{hp['max']})")
     print("======================================================================")
@@ -371,14 +387,6 @@ def run_test_mode(base_path, status_data):
 
     status = status_data.get("status", {})
     tickets = status_data.get("tickets", {})
-    measurement_tickets = tickets.get("measurement", 0)
-
-    if measurement_tickets <= 0:
-        print("\n======================================================================")
-        print(" [!] 測定チケットが不足しています。")
-        print(" 測定チケットは、日々の活動（Training）を蓄積することで獲得できます。")
-        print("======================================================================")
-        return
 
     available_tests = []
     for test in all_tests:
@@ -394,15 +402,22 @@ def run_test_mode(base_path, status_data):
         print("\n[!] 現在挑戦可能なテストがありません（次のゲートに対応する試験問題が未定義です）。")
         return
 
+    # 所持チケット文字列の構成
+    t_list = [f"all x{tickets.get('all', 0)}"] + [f"{p} x{tickets.get(p, 0)}" for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"] if tickets.get(p, 0) > 0]
+    tickets_str = ", ".join(t_list)
+
     print("\n======================================================================")
     print("                    ⚡ ランクゲート（昇段試験）選択 ⚡")
     print("======================================================================")
-    print(f" 所持チケット: 測定チケット x{measurement_tickets}")
+    print(f" 所持チケット: {tickets_str}")
     print("----------------------------------------------------------------------")
     print(" 挑戦可能な試験一覧:")
     for idx, test in enumerate(available_tests, 1):
+        param = test.get("param")
         time_min = test.get("time_limit_seconds", 0) // 60
-        print(f"  [{idx}] {test.get('param')} -> {test.get('target_gate')} ゲート試験")
+        has_t = tickets.get(param, 0) > 0 or tickets.get("all", 0) > 0
+        t_status = "" if has_t else " ⚠️ (チケット不足)"
+        print(f"  [{idx}] {param} -> {test.get('target_gate')} ゲート試験{t_status}")
         print(f"      (難易度: {test.get('difficulty')}, 制限時間: {time_min}分)")
     print("----------------------------------------------------------------------")
     
@@ -425,10 +440,17 @@ def run_test_mode(base_path, status_data):
     gate = selected_test.get("target_gate")
     limit_sec = selected_test.get("time_limit_seconds", 0)
     
+    # チケットの有無チェック
+    has_specific = tickets.get(param, 0) > 0
+    has_all = tickets.get("all", 0) > 0
+    if not has_specific and not has_all:
+        print(f"\n [!] 測定チケット({param}) または 測定チケット(all) が不足しています。")
+        return
+
     print("\n======================================================================")
     print(f" 【警告】これより {param} の {gate}ゲート試験を開始します。")
     print(f" 制限時間: {limit_sec // 60}分 ({limit_sec}秒)")
-    print(" 開始するとタイマーが作動し、チケットを1枚消費します。")
+    print(" 开始するとタイマーが作動し、チケットを1枚消費します。")
     print(" 中断した場合もチケットは消費されますのでご注意ください。")
     print("======================================================================")
     
@@ -437,9 +459,17 @@ def run_test_mode(base_path, status_data):
         print(" 開始を中止しました。")
         return
 
-    tickets["measurement"] = measurement_tickets - 1
+    # チケット消費（優先度：専用 ➡️ all）
+    consumed_type = ""
+    if tickets.get(param, 0) > 0:
+        tickets[param] -= 1
+        consumed_type = f"専用チケット({param})"
+    elif tickets.get("all", 0) > 0:
+        tickets["all"] -= 1
+        consumed_type = "万能チケット(all)"
+
     save_json(os.path.join(base_path, "status.json"), status_data)
-    print("\n[+] 測定チケットを1枚消費しました。")
+    print(f"\n[+] {consumed_type}を1枚消費しました。")
     print("----------------------------------------------------------------------")
     print("【問題】")
     print(selected_test.get("question"))
