@@ -12,7 +12,10 @@ const firebaseConfig = {
 // Initialize Firebase Compat
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const userDocRef = db.collection('users').doc('kingo');
+let currentUserId = localStorage.getItem('rpg_user_id') || 'kingo';
+let userDocRef = db.collection('users').doc(currentUserId);
+let userList = ['kingo'];
+
 
 // グローバル変数
 let statusChart = null;
@@ -44,7 +47,18 @@ async function getPyodide() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    fetchStatusData();
+    // ユーザーリストのロードと、ステータスデータのロード
+    loadUserList().then(() => {
+        fetchStatusData();
+    });
+    
+    // ユーザーセレクターの変更イベントリスナーを設定
+    const userSelector = document.getElementById('user-selector');
+    if (userSelector) {
+        userSelector.addEventListener('change', (e) => {
+            switchUser(e.target.value);
+        });
+    }
     
     // textareaでのCtrl+Enter提出ショートカット設定
     const textarea = document.getElementById('test-answer-input');
@@ -62,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
 
 // クライアントサイドでのデータマイグレーション
 function migrateStatusData(data) {
@@ -1291,3 +1306,196 @@ function saveCustomTitle() {
         }
     });
 }
+
+// ----------------------------------------------------
+// 👥 マルチユーザー管理ロジック
+// ----------------------------------------------------
+
+async function loadUserList() {
+    try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.users) {
+                userList = data.users;
+            }
+        }
+    } catch (e) {
+        console.log("Local API /api/users is not available, using localStorage/defaults.");
+    }
+    
+    // localStorage からもマージ
+    const localUsers = JSON.parse(localStorage.getItem('rpg_user_list') || '[]');
+    localUsers.forEach(u => {
+        if (!userList.includes(u)) {
+            userList.push(u);
+        }
+    });
+    
+    renderUserSelector();
+}
+
+function renderUserSelector() {
+    const selector = document.getElementById('user-selector');
+    if (!selector) return;
+    
+    selector.innerHTML = '';
+    userList.forEach(userId => {
+        const option = document.createElement('option');
+        option.value = userId;
+        option.innerText = userId;
+        if (userId === currentUserId) {
+            option.selected = true;
+        }
+        selector.appendChild(option);
+    });
+}
+
+function switchUser(userId) {
+    if (!userId || userId === currentUserId) return;
+    
+    currentUserId = userId;
+    localStorage.setItem('rpg_user_id', currentUserId);
+    userDocRef = db.collection('users').doc(currentUserId);
+    
+    // UIをロード
+    fetchStatusData().then(() => {
+        // レーダーチャートのリサイズとアップデート
+        if (statusChart) {
+            statusChart.resize();
+            statusChart.update();
+        }
+        // テストリストの再描画
+        loadAvailableTests();
+    });
+}
+
+function openUserModal() {
+    const modal = document.getElementById('user-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        const input = document.getElementById('new-user-input');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    }
+}
+
+function closeUserModal() {
+    const modal = document.getElementById('user-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function createNewUser() {
+    const input = document.getElementById('new-user-input');
+    if (!input) return;
+    
+    const newUserId = input.value.trim();
+    if (!newUserId) {
+        alert("冒険者IDを入力してください！");
+        return;
+    }
+    
+    if (!/^[a-zA-Z0-9_-]+$/.test(newUserId)) {
+        alert("IDに使用できるのは半角英数字、アンダースコア（_）、ハイフン（-）のみです。");
+        return;
+    }
+    
+    if (userList.includes(newUserId)) {
+        alert("このIDは既に存在しています。");
+        return;
+    }
+    
+    // 初期データの作成
+    const initialData = {
+        "build_score": "Novice Adventurer",
+        "combat_power": 700,
+        "last_updated": new Date().toISOString(),
+        "status": {
+            "HP": {"current": 100, "max": 100},
+            "STR": {"current": 100, "peak": 100},
+            "VIT": {"current": 100, "peak": 100},
+            "INT": {"current": 100, "peak": 100},
+            "WIS": {"current": 100, "peak": 100},
+            "MND": {"current": 100, "peak": 100},
+            "CHA": {"current": 100, "peak": 100},
+            "DEV": {"current": 100, "peak": 100}
+        },
+        "training": {
+            "STR": 0, "VIT": 0, "INT": 0, "WIS": 0, "MND": 0, "CHA": 0, "DEV": 0
+        },
+        "tickets": {
+            "all": 0, "STR": 0, "VIT": 0, "INT": 0, "WIS": 0, "MND": 0, "CHA": 0, "DEV": 0
+        },
+        "titles": {
+            "active": ["目覚めし人"],
+            "list": ["目覚めし人"]
+        },
+        "active_title_parts": ["目覚めし人"],
+        "title_parts": ["目覚めし人", "の"],
+        "unlocked_achievements": ["ACH_FIRST_STEP"],
+        "archetypes": ["Adventurer"],
+        "history": [
+            {
+                "date": getTodayString(),
+                "event": "Character Created: Adventurer Registration Completed",
+                "status_change": {}
+            }
+        ],
+        "pending_answers": []
+    };
+    
+    const saveBtn = document.querySelector('#user-modal .btn-primary');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = "登録中...";
+    }
+    
+    // Firestore上に初期化データをセット
+    db.collection('users').doc(newUserId).set({
+        status_json: JSON.stringify(initialData)
+    })
+    .then(() => {
+        alert(`新しい冒険者「${newUserId}」を登録しました！`);
+        
+        // ユーザーリストの更新
+        userList.push(newUserId);
+        
+        // localStorageに保存
+        const localUsers = JSON.parse(localStorage.getItem('rpg_user_list') || '[]');
+        if (!localUsers.includes(newUserId)) {
+            localUsers.push(newUserId);
+            localStorage.setItem('rpg_user_list', JSON.stringify(localUsers));
+        }
+        
+        // ドロップダウン再構築
+        renderUserSelector();
+        
+        // ユーザー切り替え
+        currentUserId = newUserId;
+        localStorage.setItem('rpg_user_id', currentUserId);
+        userDocRef = db.collection('users').doc(currentUserId);
+        
+        // UIのロード
+        fetchStatusData().then(() => {
+            // テストリストの再描画
+            loadAvailableTests();
+        });
+        
+        closeUserModal();
+    })
+    .catch(err => {
+        console.error("新規ユーザー登録エラー:", err);
+        alert("新規ユーザーの登録に失敗しました。クラウドデータベースの接続状態を確認してください。");
+    })
+    .finally(() => {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "冒険を開始する";
+        }
+    });
+}
+
