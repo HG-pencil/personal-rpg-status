@@ -1535,13 +1535,22 @@ function renderQuests(data) {
             completedCount++;
         }
         
+        const clientText = q.client || "冒険者ギルド";
+        const rewardText = q.reward || "EXP +100";
+        
         const questHtml = `
-            <div class="quest-card ${isCompleted ? 'completed' : ''}" style="background: rgba(0, 0, 0, 0.4); border: 1px solid ${isCompleted ? 'rgba(46, 213, 115, 0.3)' : 'rgba(255, 255, 255, 0.08)'}; border-radius: 8px; padding: 12px; display: flex; align-items: flex-start; gap: 12px; transition: all 0.2s; box-shadow: ${isCompleted ? '0 0 10px rgba(46, 213, 115, 0.05)' : 'none'};">
-                <input type="checkbox" ${isCompleted ? 'checked' : ''} disabled style="margin-top: 3px; pointer-events: none; width: 16px; height: 16px; accent-color: #2ed573; cursor: default;">
-                <div style="flex: 1; text-align: left;">
-                    <div style="font-size: 0.65rem; color: var(--text-secondary); margin-bottom: 2px; font-family: 'Outfit', sans-serif;">${q.step}</div>
-                    <div style="font-size: 0.85rem; font-weight: bold; color: ${isCompleted ? '#747d8c' : '#fff'}; text-decoration: ${isCompleted ? 'line-through' : 'none'}; font-family: 'Noto Sans JP', sans-serif;">${q.title}</div>
-                    ${q.description ? `<div style="font-size: 0.75rem; color: ${isCompleted ? '#57606f' : 'var(--text-secondary)'}; margin-top: 6px; line-height: 1.4; white-space: pre-wrap; font-family: 'Noto Sans JP', sans-serif;">${q.description}</div>` : ''}
+            <div class="quest-card ${isCompleted ? 'completed' : ''}">
+                <div class="quest-card-header">
+                    <span class="quest-card-client">FROM: ${clientText}</span>
+                    <span class="quest-card-rank">${q.step}</span>
+                </div>
+                <div class="quest-card-title">${q.title}</div>
+                ${q.description ? `<div class="quest-card-desc">${q.description}</div>` : ''}
+                <div class="quest-card-footer">
+                    <div class="quest-card-reward">REWARD: ${rewardText}</div>
+                    <div style="font-family: 'Outfit', sans-serif; font-weight: bold; color: ${isCompleted ? '#ab2c16' : '#70542d'};">
+                        ${isCompleted ? '● CLEAR' : '● ACTIVE'}
+                    </div>
                 </div>
             </div>
         `;

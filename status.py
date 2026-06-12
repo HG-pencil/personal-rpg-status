@@ -23,6 +23,101 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
+def translate_to_quest(raw_title, raw_desc):
+    # デフォルト値
+    title = raw_title
+    desc = raw_desc
+    rank = "C"
+    client = "冒険者ギルド"
+    reward = "EXP +100"
+    
+    # 判定の正規化
+    t_norm = raw_title.lower()
+    
+    # マッピングルール
+    if any(x in t_norm for x in ["撤退基準", "最大許容損失", "分散基準", "損切り"]):
+        client = "投資審議会"
+        rank = "B"
+        reward = "MND +5"
+        if "撤退基準" in raw_title:
+            title = "【緊急指令】魔導投資兵器の暴走を抑止せよ！"
+            desc = "投資システムのコア魔導回路に、総資金10%損失時に全ポジションを強制決済する「セーフティゲート（緊急脱出機構）」をハードコーディングせよ。相場の幻惑魔法や感情のデバフに惑わされるな。"
+        elif "最大許容損失" in raw_title:
+            title = "【防衛戦】最大許容損失額の封印"
+            desc = "総投資資金 of 10%を下回った時点で、感情や独自の相場観を一切無視して全ポジションを強制決済（プラグを抜く）するルールをシステムにハードコーディングせよ。"
+        elif "分散基準" in raw_title:
+            title = "【防御強化】アセット分散結界の構築"
+            desc = "単一の銘柄への集中投資バグを防ぐため、1つのアセット・銘柄への投資割合を総資金の15%以内に制限する物理結界を設定せよ。"
+            
+    elif any(x in t_norm for x in ["家庭内", "妻", "対話"]):
+        client = "家庭運営ギルド"
+        rank = "A"
+        reward = "CHA +5"
+        title = "【守護指令】聖域（家庭）のバグ回収対話"
+        desc = "毎週日曜日の午前中など、固定で「週次30分」の対話時間をスケジュールに強制ロックせよ。未来の収益化よりも重要な「妻との平穏な生活（聖域）」の崩壊を防ぐためのエラーログ回収作業である。"
+        
+    elif any(x in t_norm for x in ["生ログ", "インデックス"]):
+        client = "AI開拓者連盟"
+        rank = "C"
+        reward = "DEV +3"
+        title = "【データ解析】大量生ログへのインデックス付与"
+        desc = "NotebookLMへの音声ログ入力時、最後の5秒間で必ず検索用ハッシュタグ（キーワード：重量物、羽田、トラブルなど）を口頭で付与し、未来のAI抽出精度を高めるための仕込みを完了せよ。"
+        
+    elif "精密検査" in raw_title:
+        client = "健康管理神殿"
+        rank = "S"
+        reward = "VIT +10"
+        title = "【肉体再生】ハードウェア精密デバッグ受診"
+        desc = "肝機能および血中脂質異常のデバッグのため、今月中に必ず内科・消化器内科での精密検査を予約・受診し、プロの神官による診断を完了させよ。"
+        
+    elif "日常メンテナンス" in raw_title or "徒歩" in raw_title or "シーパップ" in raw_title:
+        client = "健康管理神殿"
+        rank = "B"
+        reward = "VIT +5"
+        title = "【日常任務】肉体の日常メンテナンス"
+        desc = "毎日1時間の徒歩と、睡眠時無呼吸症候群に対するシーパップ（CPAP）外来の受診を継続し、強制シャットダウンを回避せよ。"
+        
+    elif "副業規定" in raw_title or "法的リスク" in raw_title:
+        client = "防波堤（会社）守備隊"
+        rank = "C"
+        reward = "INT +3"
+        title = "【偵察任務】副業規定と法的リスクの調査"
+        desc = "今後の収益化に向けて、勤務先の就業規則（副業規定、競業規定、情報管理規定）を再確認し、潜むリスクと安全な防衛線を整理せよ。"
+        
+    elif "ブラックボックス" in raw_title:
+        client = "AI開拓者連盟"
+        rank = "A"
+        reward = "DEV +5"
+        title = "【開拓任務】便利屋化を防ぐブラックボックスの構築"
+        desc = "社内の自動化システムを「私的Googleアカウントを経由しなければ中身が空っぽで動かない設計」にし、自身を不要にするブラックボックスの仕様を策定せよ。"
+        
+    elif "受託案件" in raw_title:
+        client = "商業ギルド"
+        rank = "A"
+        reward = "WIS +5"
+        title = "【商業任務】最初の受託案件の獲得アクション"
+        desc = "最速でキャッシュを作る手段として、Kintoneツールの外販など、小規模でも良いので「受託案件の最初の1件」を獲得するための初動を開始せよ。"
+        
+    elif any(x in t_norm for x in ["音声ログ蓄積", "現場知識", "蓄積"]):
+        client = "賢者の塔"
+        rank = "B"
+        reward = "WIS +5"
+        title = "【知識伝承】20年の経験が眠る音声ログの蓄積"
+        desc = "重量機工部での現場管理や統括部での収支管理など、20年間の泥臭い経験（最大のコア資産）を、ハッシュタグ付きでNotebookLMに蓄積し続けよ。"
+    else:
+        # デフォルト変換
+        title = f"【任務】{raw_title}"
+
+    return {
+        "step": f"Rank {rank}",
+        "title": title,
+        "description": desc,
+        "client": client,
+        "reward": reward,
+        "original_title": raw_title,
+        "status": "pending"
+    }
+
 def parse_monthly_goals(user_id="kingo"):
     target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
     file_path = os.path.join(target_base, user_id, "今月の目標.txt")
@@ -43,16 +138,16 @@ def parse_monthly_goals(user_id="kingo"):
             "分散基準の設定",
             "「家庭内運用（妻）」のバグ回収フローのスケジュールロック",
             "大量生ログへの「インデックス付与」ルールの即時適用",
-            "精密検査の予約と受診",
-            "日常メンテナンスの継続",
-            "副業規定と法的リスクの整理",
-            "物理的ブラックボックスの仕様確定（12月完了目標に向けた初動）",
-            "物理的ブラックボックスの仕様確定",
+            "精密検査 of予約と受診",
+            "日常メンテナンス of継続",
+            "副業規定と法的リスク of整理",
+            "物理的ブラックボックス of仕様確定（12月完了目標に向けた初動）",
+            "物理的ブラックボックス of仕様確定",
             "最初の受託案件獲得へ向けた活動",
-            "現場知識の音声ログ蓄積の継続",
-            "「家庭内運用（妻）」のバグ回収フローの定期実行",
+            "現場知識 of音声ログ蓄積 of継続",
+            "「家庭内運用（妻）」 ofバグ回収フロー of定期実行",
             "「大量生ログ」へのインデックス付与",
-            "投資システムの「撤退基準（Decision Kill Criteria）」の設定"
+            "投資システム of「撤退基準（Decision Kill Criteria）」 of設定"
         ]
         
         if not step_matches:
@@ -74,12 +169,9 @@ def parse_monthly_goals(user_id="kingo"):
                 if any(x in title or x in desc for x in ["- [x]", "[x]", "（完了）", "(完了)", "【完了】", "（済）", "(済)", "【達成】"]):
                     status = "completed"
                     
-                quests.append({
-                    "step": "Monthly Mission",
-                    "title": title,
-                    "description": desc,
-                    "status": status
-                })
+                quest_obj = translate_to_quest(title, desc)
+                quest_obj["status"] = status
+                quests.append(quest_obj)
             return quests
 
         for m in step_matches:
@@ -104,12 +196,9 @@ def parse_monthly_goals(user_id="kingo"):
                 if any(x in title or x in desc for x in ["- [x]", "[x]", "（完了）", "(完了)", "【完了】", "（済）", "(済)", "【達成】"]):
                     status = "completed"
                     
-                quests.append({
-                    "step": step_name,
-                    "title": title,
-                    "description": desc,
-                    "status": status
-                })
+                quest_obj = translate_to_quest(title, desc)
+                quest_obj["status"] = status
+                quests.append(quest_obj)
         return quests
     except Exception as e:
         print(f"[!] 今月の目標のパースに失敗しました: {e}")
@@ -271,8 +360,9 @@ def load_status(filepath, user_id="kingo"):
         if quests:
             existing_quests = cloud_data.get("quests", [])
             completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
+            completed_originals = {q.get("original_title") for q in existing_quests if q.get("status") == "completed" and q.get("original_title")}
             for q in quests:
-                if q["title"] in completed_titles:
+                if q["title"] in completed_titles or q.get("original_title") in completed_originals:
                     q["status"] = "completed"
             cloud_data["quests"] = quests
             
@@ -299,8 +389,9 @@ def load_status(filepath, user_id="kingo"):
             if quests:
                 existing_quests = local_data.get("quests", [])
                 completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
+                completed_originals = {q.get("original_title") for q in existing_quests if q.get("status") == "completed" and q.get("original_title")}
                 for q in quests:
-                    if q["title"] in completed_titles:
+                    if q["title"] in completed_titles or q.get("original_title") in completed_originals:
                         q["status"] = "completed"
                 local_data["quests"] = quests
                 

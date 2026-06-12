@@ -1256,3 +1256,168 @@ body {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* ====================================================
+   📜 冒険者ギルド風クエスト掲示板 UI
+   ==================================================== */
+
+/* 掲示板背景 */
+#quest-tab .quests-grid {
+    background: #1e150f linear-gradient(180deg, #18100a 0%, #2b1f14 100%);
+    border: 5px solid #2d1e10;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.95), 0 10px 20px rgba(0,0,0,0.6);
+    padding: 22px 18px;
+    border-radius: 8px;
+    border-image: linear-gradient(to bottom, #422d1b, #1d130a) 1;
+    position: relative;
+}
+
+/* 羊皮紙風クエスト依頼書 */
+.quest-card {
+    background: linear-gradient(135deg, #f7ebb6 0%, #dfc897 100%) !important;
+    color: #38250e !important;
+    border: 1px solid #cbb685 !important;
+    border-radius: 3px !important;
+    padding: 16px 14px 14px 14px !important;
+    margin-bottom: 16px !important;
+    box-shadow: 4px 6px 12px rgba(0, 0, 0, 0.4), inset 0 0 15px rgba(255, 255, 255, 0.4) !important;
+    position: relative;
+    font-family: 'Noto Sans JP', sans-serif;
+    transform: rotate(0.4deg);
+    transition: transform 0.2s, box-shadow 0.2s, filter 0.2s !important;
+}
+
+.quest-card:nth-child(even) {
+    transform: rotate(-0.5deg);
+}
+
+.quest-card:hover {
+    transform: rotate(0deg) scale(1.015) !important;
+    box-shadow: 6px 10px 18px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(255, 255, 255, 0.5) !important;
+    z-index: 10;
+}
+
+/* 木の掲示板へのピン留め（画鋲） */
+.quest-card::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    background: radial-gradient(circle at 4px 4px, #ff3f34, #8c110b);
+    border-radius: 50%;
+    box-shadow: 0 4px 5px rgba(0, 0, 0, 0.5), inset -1px -1px 2px rgba(0, 0, 0, 0.4);
+    z-index: 5;
+}
+
+/* クエストのメタ行（依頼主 ＆ ランク） */
+.quest-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.65rem;
+    font-weight: bold;
+    font-family: 'Outfit', 'Press Start 2P', sans-serif;
+    color: #8f7247;
+    border-bottom: 1px dashed rgba(143, 114, 71, 0.4);
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.quest-card-client {
+    font-family: 'Noto Sans JP', sans-serif;
+    color: #70542d;
+    background: rgba(143, 114, 71, 0.08);
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+.quest-card-rank {
+    font-size: 0.7rem;
+    color: #d35400;
+    letter-spacing: 1px;
+}
+
+/* クエストタイトル */
+.quest-card-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #1a0f05;
+    margin-bottom: 6px;
+    text-align: left;
+    font-family: 'Noto Sans JP', sans-serif;
+}
+
+/* クエスト説明 */
+.quest-card-desc {
+    font-size: 0.75rem;
+    color: #4f3b25;
+    line-height: 1.45;
+    margin-top: 6px;
+    text-align: left;
+    white-space: pre-wrap;
+}
+
+/* クエスト報酬とステータス */
+.quest-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    border-top: 1px dashed rgba(143, 114, 71, 0.3);
+    padding-top: 8px;
+    font-size: 0.7rem;
+}
+
+.quest-card-reward {
+    color: #ab2c16;
+    font-weight: bold;
+    font-family: 'Outfit', 'Noto Sans JP', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.quest-card-reward::before {
+    content: '💎';
+    font-size: 0.75rem;
+}
+
+/* クエスト完了時のCLEARスタンプ */
+.quest-card.completed {
+    background: linear-gradient(135deg, #e4d7ae 0%, #ceb98d 100%) !important;
+    filter: sepia(20%) contrast(90%);
+}
+
+.quest-card.completed::after {
+    content: 'CLEAR';
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: rgba(192, 41, 43, 0.65); /* 赤いギルドスタンプ */
+    border: 3px solid rgba(192, 41, 43, 0.65);
+    padding: 2px 12px;
+    border-radius: 4px;
+    transform: rotate(-12deg);
+    pointer-events: none;
+    letter-spacing: 2px;
+    box-shadow: 0 0 4px rgba(192, 41, 43, 0.2);
+    text-shadow: 0 0 1px rgba(192, 41, 43, 0.1);
+}
+
+.quest-card.completed .quest-card-title {
+    color: #7a6a58 !important;
+    text-decoration: line-through;
+    text-decoration-color: rgba(192, 41, 43, 0.4);
+}
+
+.quest-card.completed .quest-card-desc {
+    color: #8c7e6e !important;
+}
+
