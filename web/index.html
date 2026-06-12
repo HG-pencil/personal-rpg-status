@@ -83,14 +83,13 @@
                 <div class="tabs-header" style="flex-wrap: wrap; gap: 4px;">
                     <button class="tab-btn active" onclick="switchTab('status-tab')">能力ステータス</button>
                     <button class="tab-btn" onclick="switchTab('quest-tab')">今月のクエスト</button>
-                    <button class="tab-btn" onclick="switchTab('roadmap-tab')">ロードマップ</button>
                     <button class="tab-btn" onclick="switchTab('items-tab')">アイテム</button>
                     <button class="tab-btn" onclick="switchTab('chart-tab')">レーダーチャート</button>
                     <button class="tab-btn" onclick="switchTab('advisory-tab')">GMアドバイス</button>
                     <button class="tab-btn" onclick="switchTab('test-tab')">ゲート試験</button>
                 </div>
 
-                <!-- ステータスタブ -->
+                <!-- 能力ステータスタブ -->
                 <div id="status-tab" class="tab-content active">
                     <div class="params-list" id="params-container">
                         <!-- JSで動的に追加 -->
@@ -112,16 +111,6 @@
                         <!-- JSで動的に追加 -->
                     </div>
                 </div>
-
-                <!-- ロードマップタブ -->
-                <div id="roadmap-tab" class="tab-content">
-                    <div class="roadmap-timeline" id="roadmap-container" style="display: flex; flex-direction: column; gap: 15px; max-height: 520px; overflow-y: auto; padding-right: 5px; position: relative;">
-                        <!-- JSで動的に追加 -->
-                    </div>
-                </div>
-
-
-                <!-- アイテムタブ -->
                 <div id="items-tab" class="tab-content">
                     <div class="items-grid" id="items-container">
                         <!-- JSで動的に追加 -->

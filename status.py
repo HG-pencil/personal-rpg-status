@@ -118,6 +118,75 @@ def translate_to_quest(raw_title, raw_desc):
         "status": "pending"
     }
 
+def generate_roadmap_events(roadmap, status_data):
+    events = []
+    if not roadmap or "phases" not in roadmap:
+        return events
+        
+    status = status_data.get("status", {})
+    
+    # 進行中の項目をチェック
+    for phase in roadmap.get("phases", []):
+        for item in phase.get("items", []):
+            param_bind = item.get("param_bind")
+            if not param_bind:
+                continue
+                
+            p_data = status.get(param_bind, {})
+            curr_val = p_data.get("current", 100) if p_data else 100
+            threshold = 280 if param_bind == "CHA" else 300
+            
+            # 閾値未満（PROGRESS状態）の場合にイベントを生成
+            if curr_val < threshold:
+                title = f"【突発イベント】{item.get('title')}"
+                desc = item.get("description", "")
+                client = "冒険者ギルド"
+                rank = "B"
+                reward = f"{param_bind} +5"
+                
+                # パラメータやキーワードに応じたゲーム風の個別カスタマイズ
+                if param_bind == "VIT" and "健康" in item.get("title", ""):
+                    title = "【緊急指令】駆け込め！ホスピタル！！"
+                    desc = "体に長年蓄積された毒（BMI・肝機能等の異常魔力）が体を蝕み始めている。今すぐ町の内科に駆け込み、精密検査（デバッグ）を受診せよ！その実績報告をもってクエストクリアとする。"
+                    client = "健康管理神殿"
+                    reward = "VIT +10"
+                    rank = "A"
+                elif param_bind == "DEV" and "ブラックボックス" in item.get("title", ""):
+                    title = "【防衛任務】便利屋化を防ぐブラックボックスの構築"
+                    desc = "人員不足による「業務範囲2倍化リスク」の魔の手が迫っている！社内システムを「私的Googleアカウントを経由しなければ動かない設計」にし、自分を不要にする絶対防御のブラックボックス仕様を策定せよ。"
+                    client = "AI開拓者連盟"
+                    reward = "DEV +10"
+                    rank = "S"
+                elif param_bind == "WIS" and "現場知識" in item.get("title", ""):
+                    title = "【伝承試練】賢者の音声ログ百連発！"
+                    desc = "20年間にわたる重量機工・統括管理の貴重な泥臭い経験（古代の英知）が散逸する危機にある。ハッシュタグ付きで音声ログをNotebookLMにひたすら蓄積し、知識を伝承せよ。"
+                    client = "賢者の塔"
+                    reward = "WIS +5"
+                    rank = "B"
+                elif param_bind == "MND" and "撤退基準" in item.get("title", ""):
+                    title = "【精神試練】幻惑の損切りと絶対撤退規律"
+                    desc = "投資における自己規律を試す試練。市場の幻惑魔法を退け、撤退基準（総資金10%損失での強制決済）と分散結界（単一15%以内）の規律を心魂に刻み込め。"
+                    client = "投資審議会"
+                    reward = "MND +5"
+                    rank = "B"
+                elif param_bind == "CHA" and "家庭" in item.get("title", ""):
+                    title = "【守護試練】日常対話による家庭円満結界"
+                    desc = "最上位の価値観である家庭の平穏（聖域）を守るための試練。毎週日曜日の午前中など、固定で「週次30分」の対話時間をスケジュールに強制ロックし、バグを未然に回収せよ。"
+                    client = "家庭運営ギルド"
+                    reward = "CHA +5"
+                    rank = "A"
+                
+                events.append({
+                    "step": f"Rank {rank}",
+                    "title": title,
+                    "description": desc,
+                    "client": client,
+                    "reward": reward,
+                    "original_title": item.get("title"),
+                    "status": "pending"
+                })
+    return events
+
 def parse_monthly_goals(user_id="kingo"):
     target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
     file_path = os.path.join(target_base, user_id, "今月の目標.txt")
@@ -356,15 +425,19 @@ def load_status(filepath, user_id="kingo"):
     if cloud_data:
         cloud_data = migrate_data(cloud_data)
         
+        # ロードマップから突発イベントを生成
+        roadmap_events = generate_roadmap_events(roadmap, cloud_data)
+        all_quests = quests + roadmap_events
+        
         # 目標・ロードマップをデータにマージ
-        if quests:
+        if all_quests:
             existing_quests = cloud_data.get("quests", [])
             completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
             completed_originals = {q.get("original_title") for q in existing_quests if q.get("status") == "completed" and q.get("original_title")}
-            for q in quests:
+            for q in all_quests:
                 if q["title"] in completed_titles or q.get("original_title") in completed_originals:
                     q["status"] = "completed"
-            cloud_data["quests"] = quests
+            cloud_data["quests"] = all_quests
             
         if roadmap:
             cloud_data["roadmap"] = roadmap
@@ -385,15 +458,19 @@ def load_status(filepath, user_id="kingo"):
             local_data = json.load(f)
             local_data = migrate_data(local_data)
             
+            # ロードマップから突発イベントを生成
+            roadmap_events = generate_roadmap_events(roadmap, local_data)
+            all_quests = quests + roadmap_events
+            
             # オフライン時でもテキストファイルがあればマージ
-            if quests:
+            if all_quests:
                 existing_quests = local_data.get("quests", [])
                 completed_titles = {q["title"] for q in existing_quests if q.get("status") == "completed"}
                 completed_originals = {q.get("original_title") for q in existing_quests if q.get("status") == "completed" and q.get("original_title")}
-                for q in quests:
+                for q in all_quests:
                     if q["title"] in completed_titles or q.get("original_title") in completed_originals:
                         q["status"] = "completed"
-                local_data["quests"] = quests
+                local_data["quests"] = all_quests
                 
             if roadmap:
                 local_data["roadmap"] = roadmap
