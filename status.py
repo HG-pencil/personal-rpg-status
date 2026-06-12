@@ -24,8 +24,8 @@ except ImportError:
 def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
 
-def pull_from_firestore():
-    url = "https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/kingo"
+def pull_from_firestore(user_id="kingo"):
+    url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
     try:
         import urllib.request
         import json
@@ -39,8 +39,8 @@ def pull_from_firestore():
         print(f"[!] クラウドからのデータ取得に失敗しました (オフライン動作): {e}")
     return None
 
-def push_to_firestore(data):
-    url = "https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/kingo"
+def push_to_firestore(data, user_id="kingo"):
+    url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
     try:
         import urllib.request
         import json
@@ -89,18 +89,18 @@ def migrate_data(data):
                 
     return data
 
-def load_status(filepath):
+def load_status(filepath, user_id="kingo"):
     # まずクラウドからのプルを試みる
-    cloud_data = pull_from_firestore()
+    cloud_data = pull_from_firestore(user_id)
     if cloud_data:
         cloud_data = migrate_data(cloud_data)
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
-            export_to_notebooklm(cloud_data)
+            export_to_notebooklm(cloud_data, user_id)
             return cloud_data
         except Exception:
-            export_to_notebooklm(cloud_data)
+            export_to_notebooklm(cloud_data, user_id)
             return cloud_data
             
     # クラウドがオフラインならローカルキャッシュからロード
@@ -108,7 +108,7 @@ def load_status(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
             local_data = migrate_data(local_data)
-            export_to_notebooklm(local_data)
+            export_to_notebooklm(local_data, user_id)
             return local_data
     except FileNotFoundError:
         print(f"エラー: データファイルが見つかりません: {filepath}")
@@ -181,10 +181,18 @@ def check_achievements(base_path, data):
 
     return newly_unlocked
 
-def export_to_notebooklm(data):
-    target_dir = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
-    if not os.path.exists(target_dir):
+def export_to_notebooklm(data, user_id="kingo"):
+    target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
+    if not os.path.exists(target_base):
         return
+        
+    target_dir = os.path.join(target_base, user_id)
+    if not os.path.exists(target_dir):
+        try:
+            os.makedirs(target_dir)
+        except Exception as e:
+            print(f"[!] NotebookLM用サブフォルダの作成に失敗しました: {e}")
+            return
         
     # 1. status.json のコピー
     try:
@@ -201,7 +209,7 @@ def export_to_notebooklm(data):
         archetypes = data.get("archetypes", [])
         
         md_lines = []
-        md_lines.append("# 我部宏和（Kingo） RPG能力ステータスサマリー")
+        md_lines.append(f"# {user_id} RPG能力ステータスサマリー")
         md_lines.append(f"最終同期日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         
         md_lines.append("## 👤 ヒーロー基本ステータス")
@@ -256,7 +264,7 @@ def export_to_notebooklm(data):
     except Exception as e:
         print(f"[!] NotebookLM用サマリーMarkdownの書き出しに失敗しました: {e}")
 
-def save_json(filepath, data):
+def save_json(filepath, data, user_id="kingo"):
     # ローカルキャッシュの保存
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -265,10 +273,10 @@ def save_json(filepath, data):
         print(f"エラー: ファイルの保存に失敗しました: {e}")
         
     # NotebookLM用自動エクスポート
-    export_to_notebooklm(data)
+    export_to_notebooklm(data, user_id)
         
     # クラウド同期
-    push_to_firestore(data)
+    push_to_firestore(data, user_id)
 
 def print_status_cli(data):
     status = data.get("status", {})
@@ -424,7 +432,7 @@ def get_next_gate(current_val):
     eligible_gates = [g for g in gates if g > current_val]
     return eligible_gates[0] if eligible_gates else 999
 
-def import_training_data(base_path, data, json_str):
+def import_training_data(base_path, data, json_str, user_id="kingo"):
     if json_str == "-":
         import sys
         json_str = sys.stdin.read()
@@ -523,7 +531,7 @@ def import_training_data(base_path, data, json_str):
     data["last_updated"] = datetime.now().isoformat()
 
     # 保存
-    save_json(os.path.join(base_path, "status.json"), data)
+    save_json(os.path.join(base_path, f"status_{user_id}.json"), data, user_id)
 
     # 結果出力
     print("======================================================================")
@@ -542,7 +550,7 @@ def import_training_data(base_path, data, json_str):
         print(f" [❤️ HP回復] 体調が整い、HPが {hp_recovered_total} 回復しました！(現在: {hp['current']}/{hp['max']})")
     print("======================================================================")
 
-def run_test_mode(base_path, status_data):
+def run_test_mode(base_path, status_data, user_id="kingo"):
     tests_filepath = os.path.join(base_path, "status_tests.json")
     if not os.path.exists(tests_filepath):
         print(f"\n[!] テスト問題ファイルが見つかりません: {tests_filepath}")
@@ -634,7 +642,7 @@ def run_test_mode(base_path, status_data):
         tickets["all"] -= 1
         consumed_type = "万能チケット(all)"
 
-    save_json(os.path.join(base_path, "status.json"), status_data)
+    save_json(os.path.join(base_path, f"status_{user_id}.json"), status_data, user_id)
     print(f"\n[+] {consumed_type}を1枚消費しました。")
     print("----------------------------------------------------------------------")
     print("【問題】")
@@ -671,7 +679,7 @@ def run_test_mode(base_path, status_data):
         print(" [+] 制限時間内に回答が提出されました。")
     print("======================================================================")
 
-    pending_path = os.path.join(base_path, "pending_answers.json")
+    pending_path = os.path.join(base_path, f"pending_answers_{user_id}.json")
     pending_data = []
     if os.path.exists(pending_path):
         try:
@@ -692,7 +700,7 @@ def run_test_mode(base_path, status_data):
     }
     
     pending_data.append(new_answer)
-    save_json(pending_path, pending_data)
+    save_json(pending_path, pending_data, user_id)
     
     print("\n[+] 回答がローカルに一時保存されました。")
     print("    次回のAI（Antigravity）とのチャット時に、GMが自動的に採点を行います。")
@@ -733,17 +741,19 @@ def main():
     parser.add_argument("--test", "-t", action="store_true", help="ランクゲート測定試験モードを起動します")
     parser.add_argument("--web", "-w", action="store_true", help="ローカルWebダッシュボードをブラウザで開きます")
     parser.add_argument("--import-training", "-p", type=str, help="トレーニングデータを反映します (JSON文字列形式)")
+    parser.add_argument("--user", "-u", type=str, default="kingo", help="セーブデータのユーザーIDを指定します (デフォルト: kingo)")
     args = parser.parse_args()
     
     base_path = get_base_path()
-    filepath = os.path.join(base_path, "status.json")
+    user_id = args.user
+    filepath = os.path.join(base_path, f"status_{user_id}.json")
     
-    data = load_status(filepath)
+    data = load_status(filepath, user_id)
     
     if args.import_training:
-        import_training_data(base_path, data, args.import_training)
+        import_training_data(base_path, data, args.import_training, user_id)
     elif args.test:
-        run_test_mode(base_path, data)
+        run_test_mode(base_path, data, user_id)
     elif args.web:
         launch_web_server(base_path)
     else:
