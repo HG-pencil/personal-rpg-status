@@ -24,12 +24,19 @@
         <!-- ヘッダー -->
         <header class="app-header">
             <h1 class="logo-text">★ ANTIGRAVITY STATUS ★</h1>
-            <div class="user-meta-header">
+            <div class="user-meta-header" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <span class="user-label">USER:</span>
-                <span id="username" class="user-value">kingo</span>
+                <div class="select-wrapper" style="position: relative;">
+                    <select id="user-selector" class="user-select-dropdown" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; color: #fff; padding: 4px 28px 4px 10px; font-size: 0.85rem; font-weight: bold; cursor: pointer; outline: none; transition: all 0.2s ease; font-family: 'Outfit', 'Noto Sans JP', sans-serif;">
+                        <!-- JSで動的に追加 -->
+                    </select>
+                    <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: rgba(255, 255, 255, 0.5); pointer-events: none; font-size: 0.6rem;">▼</span>
+                </div>
+                <button id="add-user-btn" class="btn" style="padding: 4px 8px; font-size: 0.7rem; background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.3); color: var(--accent-blue); cursor: pointer; border-radius: 4px; font-weight: bold; transition: all 0.2s;" onclick="openUserModal()">+ 新規登録</button>
                 <span id="build-score" class="build-tag">Loading Build...</span>
             </div>
         </header>
+
 
         <!-- メイングリッド -->
         <main class="dashboard-grid">
@@ -238,6 +245,30 @@
             <div class="modal-footer">
                 <button class="btn btn-danger" onclick="clearCustomTitle()">称号をリセット</button>
                 <button class="btn btn-primary" onclick="saveCustomTitle()">この称号を名乗る</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新規ユーザー登録モーダル -->
+    <div id="user-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">🆕 NEW ADVENTURER REGISTRATION</h3>
+                <button class="modal-close-btn" onclick="closeUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <section class="modal-section">
+                    <h4 class="modal-section-title">👤 冒険者ID（ユーザーID）の登録</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4; font-family: 'Noto Sans JP', sans-serif;">
+                        新しく冒険を始めるプレイヤーのID（半角英数字）を入力してください。<br>
+                        ※他のユーザーと重複しない一意のIDを設定してください。
+                    </p>
+                    <input type="text" id="new-user-input" class="test-textarea" style="height: 40px; padding: 8px; font-size: 0.9rem; width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; color: #fff; outline: none; transition: border-color 0.2s;" placeholder="例: charlie">
+                </section>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="closeUserModal()">キャンセル</button>
+                <button class="btn btn-primary" onclick="createNewUser()">冒険を開始する</button>
             </div>
         </div>
     </div>
