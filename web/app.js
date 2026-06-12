@@ -98,6 +98,10 @@ function migrateStatusData(data) {
         data.active_title_parts = [];
         modified = true;
     }
+    if (!data.active_archetype) {
+        data.active_archetype = "Novice";
+        modified = true;
+    }
     
     // 初期実績の自動付与
     if (!data.unlocked_achievements.includes("ACH_FIRST_STEP")) {
@@ -149,7 +153,7 @@ function updateUI(data) {
     const hp = status.HP || { current: 100, max: 100 };
     const tickets = data.tickets || { measurement: 0 };
     const titles = data.titles || { active: [] };
-    const archetypes = data.archetypes || [];
+    const activeArchetype = data.active_archetype || 'Novice';
     
     // 基本メタ情報
     document.getElementById('build-score').innerText = data.build_score || 'Novice Build';
@@ -181,7 +185,17 @@ function updateUI(data) {
 
     // 称号と職業
     document.getElementById('active-title').innerText = titles.active.length > 0 ? titles.active.join(', ') : '(None)';
-    document.getElementById('archetype-value').innerText = archetypes.length > 0 ? archetypes.join(', ') : '(None)';
+    document.getElementById('archetype-value').innerText = activeArchetype;
+
+    // アバター画像の切り替え
+    const avatarImg = document.getElementById('char-avatar');
+    if (avatarImg) {
+        avatarImg.src = `assets/avatar_${activeArchetype}.png`;
+        avatarImg.onerror = function() {
+            avatarImg.src = 'assets/character.png';
+            avatarImg.onerror = null; // ループ防止
+        };
+    }
     
     // 日時フォーマット
     const rawDate = new Date(data.last_updated);
@@ -1446,6 +1460,7 @@ function createNewUser() {
         "title_parts": ["目覚めし人", "の"],
         "unlocked_achievements": ["ACH_FIRST_STEP"],
         "archetypes": ["Adventurer"],
+        "active_archetype": "Novice",
         "history": [
             {
                 "date": getTodayString(),
@@ -1569,6 +1584,210 @@ function renderQuests(data) {
             progressBar.style.boxShadow = "0 0 10px #00d2ff";
         }
     }
+}
+
+// ----------------------------------------------------
+// ⚙️ 転職（クラスチェンジ）システム
+// ----------------------------------------------------
+const archetypeDefinitions = [
+    {
+        id: "Novice",
+        name: "ノービス",
+        desc: "冒険にも出てないひよっこ。初期解放の基本職業。",
+        checkUnlock: (status) => true,
+        condDesc: "なし (初期解放)"
+    },
+    {
+        id: "Adventurer",
+        name: "冒険者",
+        desc: "旅慣れた標準的な冒険者。",
+        checkUnlock: (status) => {
+            const params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
+            return params.some(p => (status[p]?.current || 0) >= 200);
+        },
+        condDesc: "いずれか1つのステータスが200以上"
+    },
+    {
+        id: "Warrior",
+        name: "戦士",
+        desc: "剣と革鎧を装備した物理アタッカー。",
+        checkUnlock: (status) => (status.STR?.current || 0) >= 300,
+        condDesc: "STR >= 300"
+    },
+    {
+        id: "Scholar",
+        name: "学者",
+        desc: "魔導書とインテリな眼鏡・ローブ姿。",
+        checkUnlock: (status) => (status.WIS?.current || 0) >= 300,
+        condDesc: "WIS >= 300"
+    },
+    {
+        id: "Mage",
+        name: "魔導士",
+        desc: "魔導杖と三角帽子を被った魔法使い。",
+        checkUnlock: (status) => (status.INT?.current || 0) >= 300,
+        condDesc: "INT >= 300"
+    },
+    {
+        id: "Priest",
+        name: "僧侶",
+        desc: "十字架付きの聖杖と白ベースの聖衣。",
+        checkUnlock: (status) => (status.MND?.current || 0) >= 300,
+        condDesc: "MND >= 300"
+    },
+    {
+        id: "Bard",
+        name: "吟遊詩人",
+        desc: "竪琴（リラ）を抱え、軽装の詩人衣装。",
+        checkUnlock: (status) => (status.CHA?.current || 0) >= 300,
+        condDesc: "CHA >= 300"
+    },
+    {
+        id: "Maker",
+        name: "製作者",
+        desc: "手に工具やデバイスを持ち、モノづくりを始めた開発者。",
+        checkUnlock: (status) => (status.DEV?.current || 0) >= 300,
+        condDesc: "DEV >= 300"
+    },
+    {
+        id: "Knight",
+        name: "騎士",
+        desc: "盾と全身金属鎧を身にまとった重装騎士。",
+        checkUnlock: (status) => (status.STR?.current || 0) >= 380 && (status.VIT?.current || 0) >= 380,
+        condDesc: "STR >= 380 かつ VIT >= 380"
+    },
+    {
+        id: "Paladin",
+        name: "聖騎士",
+        desc: "白銀の鎧と大剣を装備した神聖戦士。",
+        checkUnlock: (status) => (status.STR?.current || 0) >= 380 && (status.MND?.current || 0) >= 380,
+        condDesc: "STR >= 380 かつ MND >= 380"
+    },
+    {
+        id: "Sage",
+        name: "賢者",
+        desc: "幾多の真理を極めた、光り輝く高位の魔導衣。",
+        checkUnlock: (status) => (status.INT?.current || 0) >= 380 && (status.WIS?.current || 0) >= 380,
+        condDesc: "INT >= 380 かつ WIS >= 380"
+    },
+    {
+        id: "Engineer",
+        name: "魔導技師",
+        desc: "ゴーグルを掛け、歯車ツールを持った上級技師。",
+        checkUnlock: (status) => (status.DEV?.current || 0) >= 380 && (status.INT?.current || 0) >= 380,
+        condDesc: "DEV >= 380 かつ INT >= 380"
+    },
+    {
+        id: "GrandMaster",
+        name: "グランドマスター",
+        desc: "洗練された豪華なローブと威風堂々とした佇まい。",
+        checkUnlock: (status) => {
+            const params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
+            const over400Count = params.filter(p => (status[p]?.current || 0) >= 400).length;
+            return over400Count >= 3;
+        },
+        condDesc: "いずれか3つのステータスが400以上"
+    }
+];
+
+function openArchetypeModal() {
+    const modal = document.getElementById('archetype-modal');
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    renderArchetypesList();
+}
+
+function closeArchetypeModal() {
+    const modal = document.getElementById('archetype-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function renderArchetypesList() {
+    if (!cachedStatusData) return;
+    
+    const container = document.getElementById('archetypes-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const status = cachedStatusData.status || {};
+    const currentArchetype = cachedStatusData.active_archetype || "Novice";
+    
+    archetypeDefinitions.forEach(arch => {
+        const isUnlocked = arch.checkUnlock(status);
+        const isActive = arch.id === currentArchetype;
+        
+        let cardClass = "archetype-card";
+        if (isActive) cardClass += " active";
+        if (!isUnlocked) cardClass += " locked";
+        
+        const buttonHtml = isActive
+            ? `<button class="btn btn-primary" disabled style="background: rgba(46, 213, 115, 0.2); border-color: #2ed573; color: #2ed573; cursor: default;">装備中</button>`
+            : isUnlocked
+                ? `<button class="btn btn-primary" onclick="changeArchetype('${arch.id}')">転職する</button>`
+                : `<button class="btn btn-primary" disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed; color: rgba(255,255,255,0.3);">未解放</button>`;
+                
+        const cardHtml = `
+            <div class="${cardClass}">
+                <div class="archetype-icon">${isActive ? "✨" : isUnlocked ? "🔓" : "🔒"}</div>
+                <div class="archetype-info">
+                    <div class="archetype-name">${arch.name} <span class="archetype-id-tag">(${arch.id})</span></div>
+                    <div class="archetype-desc">${arch.desc}</div>
+                    <div class="archetype-cond">条件: <span class="${isUnlocked ? 'cond-ok' : 'cond-fail'}">${arch.condDesc}</span></div>
+                </div>
+                <div class="archetype-action">
+                    ${buttonHtml}
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', cardHtml);
+    });
+}
+
+function changeArchetype(archetypeId) {
+    if (!cachedStatusData) return;
+    
+    const status = cachedStatusData.status || {};
+    const archDef = archetypeDefinitions.find(a => a.id === archetypeId);
+    if (!archDef) return;
+    
+    if (!archDef.checkUnlock(status)) {
+        alert("解放条件を満たしていないため、転職できません。");
+        return;
+    }
+    
+    const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
+    updatedData.active_archetype = archetypeId;
+    updatedData.last_updated = new Date().toISOString();
+    
+    // 互換性のため archetypes 配列も更新
+    updatedData.archetypes = [archetypeId];
+    
+    // 履歴追加
+    if (!updatedData.history) updatedData.history = [];
+    updatedData.history.push({
+        "date": getTodayString(),
+        "event": `Class Changed: Transformed into ${archDef.name} (${archetypeId})`,
+        "status_change": {}
+    });
+    
+    // 保存ボタンを一時的に無効化
+    const saveBtn = document.querySelector('#archetypes-list-container .archetype-card.active button');
+    
+    userDocRef.update({
+        status_json: JSON.stringify(updatedData)
+    })
+    .then(() => {
+        alert(`${archDef.name} に転職しました！`);
+        closeArchetypeModal();
+        fetchStatusData();
+    })
+    .catch(err => {
+        console.error("転職エラー:", err);
+        alert("転職に失敗しました。クラウドデータベースの接続状態を確認してください。");
+    });
 }
 
 

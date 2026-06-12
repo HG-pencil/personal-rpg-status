@@ -71,9 +71,9 @@
                         <span class="meta-label">ACTIVE TITLE ⚙️</span>
                         <div id="active-title" class="meta-value" style="color: var(--accent-blue); text-decoration: underline; text-underline-offset: 3px;">-</div>
                     </div>
-                    <div class="meta-item">
-                        <span class="meta-label">ARCHETYPE</span>
-                        <div id="archetype-value" class="meta-value">-</div>
+                    <div class="meta-item clickable-meta" onclick="openArchetypeModal()" style="cursor: pointer;">
+                        <span class="meta-label">ARCHETYPE ⚙️</span>
+                        <div id="archetype-value" class="meta-value" style="color: var(--accent-blue); text-decoration: underline; text-underline-offset: 3px;">-</div>
                     </div>
                 </div>
             </section>
@@ -284,6 +284,30 @@
             <div class="modal-footer">
                 <button class="btn btn-danger" onclick="closeUserModal()">キャンセル</button>
                 <button class="btn btn-primary" onclick="createNewUser()">冒険を開始する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 転職モーダル -->
+    <div id="archetype-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title">⚙️ CLASS CHANGE (転職システム)</h3>
+                <button class="modal-close-btn" onclick="closeArchetypeModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 450px; overflow-y: auto;">
+                <section class="modal-section">
+                    <h4 class="modal-section-title">⚔️ 職業選択</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4; font-family: 'Noto Sans JP', sans-serif;">
+                        能力現在値の成長に応じて新しい職業が自動的に解放されます。職業を選択すると、アバターがその職業の衣装に変化します。
+                    </p>
+                    <div id="archetypes-list-container" class="archetypes-modal-grid">
+                        <!-- JSで動的に職業カードを生成して表示 -->
+                    </div>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="closeArchetypeModal()">閉じる</button>
             </div>
         </div>
     </div>

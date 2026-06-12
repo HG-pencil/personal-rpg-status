@@ -1421,3 +1421,153 @@ body {
     color: #8c7e6e !important;
 }
 
+/* ====================================================
+   ⚙️ 転職（クラスチェンジ）システム用スタイル
+   ==================================================== */
+.archetypes-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.archetype-card {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px 16px;
+    gap: 16px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.archetype-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at top left, rgba(255,255,255,0.03) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.archetype-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.archetype-card.active {
+    border-color: var(--accent-blue);
+    background: rgba(0, 210, 255, 0.04);
+    box-shadow: 0 0 15px rgba(0, 210, 255, 0.15);
+}
+
+.archetype-card.locked {
+    opacity: 0.55;
+    background: rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+.archetype-icon {
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.archetype-card.active .archetype-icon {
+    background: rgba(0, 210, 255, 0.15);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    box-shadow: 0 0 8px rgba(0, 210, 255, 0.3);
+}
+
+.archetype-info {
+    flex: 1;
+    text-align: left;
+}
+
+.archetype-name {
+    font-family: var(--font-outfit), var(--font-noto), sans-serif;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.archetype-card.active .archetype-name {
+    color: var(--accent-blue);
+}
+
+.archetype-id-tag {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+
+.archetype-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.archetype-cond {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    font-family: var(--font-noto), sans-serif;
+}
+
+.cond-ok {
+    color: var(--hp-green);
+    font-weight: bold;
+}
+
+.cond-fail {
+    color: var(--accent-red);
+    font-weight: bold;
+}
+
+.archetype-action {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+@media (max-width: 500px) {
+    .archetype-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px;
+    }
+    
+    .archetype-icon {
+        align-self: center;
+    }
+    
+    .archetype-action {
+        width: 100%;
+    }
+    
+    .archetype-action button {
+        width: 100%;
+        justify-content: center;
+        padding: 10px;
+    }
+}
+
+

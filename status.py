@@ -443,6 +443,10 @@ def migrate_data(data):
     data.setdefault("custom_title", "")
     data.setdefault("active_title_parts", [])
     
+    # 職業データの初期設定
+    if "active_archetype" not in data:
+        data["active_archetype"] = "Novice"
+        
     # 初期実績の自動付与
     if "ACH_FIRST_STEP" not in unlocked:
         unlocked.append("ACH_FIRST_STEP")
@@ -687,7 +691,7 @@ def export_to_notebooklm(data, user_id="kingo"):
         status = data.get("status", {})
         hp = status.get("HP", {"current": 100, "max": 100})
         titles = data.get("titles", {"active": []})
-        archetypes = data.get("archetypes", [])
+        active_archetype = data.get("active_archetype", "Novice")
         
         md_lines = []
         md_lines.append(f"# {user_id} RPG能力ステータスサマリー")
@@ -697,7 +701,7 @@ def export_to_notebooklm(data, user_id="kingo"):
         md_lines.append(f"- **ビルド称号 / ランクスコア**: {data.get('build_score', 'Novice Build')} / {', '.join(titles.get('active', [])) if titles.get('active') else 'なし'}")
         md_lines.append(f"- **戦闘力 (Combat Power)**: {data.get('combat_power', 0)}")
         md_lines.append(f"- **HP (コンディション)**: {hp.get('current')}/{hp.get('max')}")
-        md_lines.append(f"- **職業 (Archetypes)**: {', '.join(archetypes) if archetypes else 'なし'}\n")
+        md_lines.append(f"- **職業 (Active Archetype)**: {active_archetype}\n")
         
         md_lines.append("## 📊 能力値 (各パラメータ詳細)")
         params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
@@ -764,7 +768,7 @@ def print_status_cli(data):
     training = data.get("training", {})
     tickets = data.get("tickets", {})
     titles = data.get("titles", {})
-    archetypes = data.get("archetypes", [])
+    active_archetype = data.get("active_archetype", "Novice")
     combat_power = data.get("combat_power", 0)
     build_score = data.get("build_score", "Novice Build")
     hp = status.get("HP", {"current": 100, "max": 100})
@@ -796,9 +800,8 @@ def print_status_cli(data):
     
     active_titles = titles.get("active", [])
     title_str = ", ".join(active_titles) if active_titles else "(None)"
-    arch_str = ", ".join(archetypes) if archetypes else "(None)"
     print(f" TITLES:     {title_str}")
-    print(f" ARCHETYPE:  {arch_str}")
+    print(f" ARCHETYPE:  {active_archetype}")
     print("----------------------------------------------------------------------")
     
     params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
