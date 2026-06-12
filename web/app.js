@@ -1042,3 +1042,205 @@ function switchTab(tabId) {
         loadAvailableTests();
     }
 }
+
+// ----------------------------------------------------
+// 🏆 アチーブメント＆称号カスタマイズモーダル
+// ----------------------------------------------------
+let currentBuildTitleParts = [];
+
+function openAchievementModal() {
+    const modal = document.getElementById('achievement-modal');
+    if (!modal) return;
+    
+    // 一時的なスロットパーツを選択中から読み込む
+    if (cachedStatusData) {
+        currentBuildTitleParts = [...(cachedStatusData.active_title_parts || [])];
+    } else {
+        currentBuildTitleParts = [];
+    }
+    
+    modal.style.display = 'flex';
+    renderAchievementsAndWords();
+}
+
+function closeAchievementModal() {
+    const modal = document.getElementById('achievement-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function renderAchievementsAndWords() {
+    if (!cachedStatusData) return;
+    
+    const unlocked = cachedStatusData.unlocked_achievements || [];
+    const ownedWords = cachedStatusData.title_parts || [];
+    
+    // 1. アチーブメント（実績）の描画
+    fetch('status_achievements.json')
+        .then(res => {
+            if (!res.ok) throw new Error('実績データの取得失敗');
+            return res.json();
+        })
+        .then(achievements => {
+            const badgesContainer = document.getElementById('achievement-badges-container');
+            if (badgesContainer) {
+                badgesContainer.innerHTML = '';
+                
+                achievements.forEach(ach => {
+                    const isUnlocked = unlocked.includes(ach.id);
+                    const icon = isUnlocked ? "🥇" : "🔒";
+                    const cardClass = isUnlocked ? "badge-card unlocked" : "badge-card";
+                    const rewardWordsText = isUnlocked 
+                        ? `<div style="font-size: 0.65rem; color: var(--timer-yellow); font-weight: bold; margin-top: 4px;">🎁 解放単語: ${ach.reward_words.map(w => `「${w}」`).join(' ')}</div>` 
+                        : `<div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">🔒 報酬: ???</div>`;
+                    
+                    const badgeHtml = `
+                        <div class="${cardClass}" title="${isUnlocked ? '解除済み' : '未解除'}">
+                            <div class="badge-icon">${icon}</div>
+                            <div class="badge-info">
+                                <div class="badge-name">${ach.name}</div>
+                                <div class="badge-desc">${ach.desc}</div>
+                                ${rewardWordsText}
+                            </div>
+                        </div>
+                    `;
+                    badgesContainer.insertAdjacentHTML('beforeend', badgeHtml);
+                });
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            const badgesContainer = document.getElementById('achievement-badges-container');
+            if (badgesContainer) {
+                badgesContainer.innerHTML = '<div class="advisory-item-web warning">実績マスタのロードに失敗しました。</div>';
+            }
+        });
+        
+    // 2. 称号スロットの描画
+    for (let i = 0; i < 4; i++) {
+        const slotEl = document.getElementById(`slot-${i}`);
+        if (slotEl) {
+            if (i < currentBuildTitleParts.length) {
+                slotEl.innerText = currentBuildTitleParts[i];
+                slotEl.className = "title-slot filled";
+            } else {
+                slotEl.innerText = "(空き)";
+                slotEl.className = "title-slot";
+            }
+        }
+    }
+    
+    // 3. 称号プレビューの描画
+    const previewEl = document.getElementById('title-preview-text');
+    if (previewEl) {
+        if (currentBuildTitleParts.length > 0) {
+            previewEl.innerText = `『 ${currentBuildTitleParts.join('')} 』`;
+        } else {
+            previewEl.innerText = "(称号未設定)";
+        }
+    }
+    
+    // 4. 所持単語パーツチップスの描画
+    const wordsContainer = document.getElementById('available-words-list');
+    if (wordsContainer) {
+        wordsContainer.innerHTML = '';
+        
+        if (ownedWords.length === 0) {
+            wordsContainer.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 8px;">所持単語パーツはありません。</div>';
+            return;
+        }
+        
+        ownedWords.forEach(word => {
+            const isUsed = currentBuildTitleParts.includes(word);
+            const chipClass = isUsed ? "word-chip used" : "word-chip";
+            
+            const chipHtml = `<span class="${chipClass}" onclick="${isUsed ? '' : `selectPart('${word}')`}">${word}</span>`;
+            wordsContainer.insertAdjacentHTML('beforeend', chipHtml);
+        });
+    }
+}
+
+function selectPart(word) {
+    if (currentBuildTitleParts.length >= 4) {
+        alert("称号に設定できる単語は最大4つまでです。");
+        return;
+    }
+    if (currentBuildTitleParts.includes(word)) {
+        return;
+    }
+    currentBuildTitleParts.push(word);
+    renderAchievementsAndWords();
+}
+
+function removePartFromSlot(slotIdx) {
+    if (slotIdx < currentBuildTitleParts.length) {
+        currentBuildTitleParts.splice(slotIdx, 1);
+        renderAchievementsAndWords();
+    }
+}
+
+function clearCustomTitle() {
+    currentBuildTitleParts = [];
+    renderAchievementsAndWords();
+}
+
+function saveCustomTitle() {
+    if (!cachedStatusData) return;
+    
+    const customTitle = currentBuildTitleParts.join('');
+    
+    const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
+    updatedData.custom_title = customTitle;
+    updatedData.active_title_parts = [...currentBuildTitleParts];
+    
+    // titles.active の更新 (表示上の一貫性維持)
+    if (customTitle) {
+        updatedData.titles = updatedData.titles || { active: [] };
+        updatedData.titles.active = [customTitle];
+    } else {
+        updatedData.titles = updatedData.titles || { active: [] };
+        updatedData.titles.active = [];
+    }
+    
+    updatedData.last_updated = new Date().toISOString();
+    
+    // 保存ボタンを一時的に無効化
+    const saveBtn = document.querySelector('.modal-footer .btn-primary');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = "保存中...";
+    }
+    
+    userDocRef.update({
+        status_json: JSON.stringify(updatedData)
+    })
+    .then(() => {
+        closeAchievementModal();
+        fetchStatusData().then(() => {
+            const activeTitle = customTitle || "称号無し";
+            // クリップボードへ依頼文を自動コピー
+            if (navigator.clipboard) {
+                const copyText = `自作称号『${activeTitle}』に合わせてアバターを更新してください！`;
+                navigator.clipboard.writeText(copyText)
+                    .then(() => {
+                        alert(`オリジナル称号「${activeTitle}」を設定しました！\nアバター再生成の依頼テキストをクリップボードに自動コピーしました。チャットに貼り付けて送信してください。`);
+                    })
+                    .catch(err => {
+                        console.error('Clipboard copy failed', err);
+                        alert(`オリジナル称号「${activeTitle}」を設定しました！`);
+                    });
+            } else {
+                alert(`オリジナル称号「${activeTitle} animate」を設定しました！`);
+            }
+        });
+    })
+    .catch(err => {
+        console.error("称号の保存エラー:", err);
+        alert("称号の保存に失敗しました。クラウドデータベースの接続状態を確認してください。");
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "この称号を名乗る";
+        }
+    });
+}

@@ -948,3 +948,311 @@ body {
         text-align: center;
     }
 }
+
+/* ====================================================
+   🏆 アチーブメント＆称号カスタマイズモーダル
+   ==================================================== */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 10, 18, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-content {
+    width: 100%;
+    max-width: 650px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalFadeIn 0.3s cubic-bezier(0.1, 0.8, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-title {
+    font-family: var(--font-pixel);
+    font-size: 0.85rem;
+    font-weight: normal;
+    color: #ffffff;
+    letter-spacing: 1px;
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.8rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.modal-close-btn:hover {
+    color: var(--accent-red);
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 1;
+}
+
+.modal-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modal-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+    border-left: 3px solid var(--accent-blue);
+    padding-left: 8px;
+    margin-bottom: 2px;
+}
+
+/* 実績バッジボード */
+.badges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+}
+
+.badge-card {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.25s ease;
+    opacity: 0.45;
+    filter: grayscale(100%);
+    position: relative;
+}
+
+.badge-card.unlocked {
+    opacity: 1;
+    filter: grayscale(0%);
+    border-color: rgba(255, 211, 44, 0.15);
+    background: linear-gradient(135deg, rgba(255, 211, 44, 0.03) 0%, rgba(0, 0, 0, 0.2) 100%);
+}
+
+.badge-card.unlocked:hover {
+    border-color: var(--timer-yellow);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 211, 44, 0.1);
+}
+
+.badge-icon {
+    font-size: 1.8rem;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.badge-card.unlocked .badge-icon {
+    border-color: rgba(255, 211, 44, 0.3);
+    background: rgba(255, 211, 44, 0.05);
+    text-shadow: 0 0 8px rgba(255, 211, 44, 0.4);
+}
+
+.badge-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.badge-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.badge-card.unlocked .badge-name {
+    color: #ffffff;
+}
+
+.badge-desc {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+
+.badge-card.unlocked .badge-desc {
+    color: var(--text-secondary);
+}
+
+/* 称号スロット */
+.title-build-container {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.title-slots-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.title-slot {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    height: 42px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    padding: 0 4px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.title-slot.filled {
+    border: 1px solid var(--accent-blue);
+    background: var(--accent-blue-dim);
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.title-slot.filled:hover {
+    border-color: var(--accent-red);
+    background: var(--accent-red-dim);
+}
+
+/* プレビュー */
+.title-preview-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+.preview-label {
+    font-family: var(--font-pixel);
+    font-size: 0.55rem;
+    color: var(--text-secondary);
+}
+
+.preview-value {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+/* 単語パーツチップス */
+.words-container-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-align: left;
+    margin-bottom: -4px;
+}
+
+.words-chips-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.03);
+}
+
+.word-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.word-chip:hover {
+    background: rgba(0, 210, 255, 0.12);
+    border-color: var(--accent-blue);
+    transform: translateY(-1px);
+}
+
+.word-chip.used {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: rgba(0, 0, 0, 0.15);
+    border-color: rgba(255, 255, 255, 0.03);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 14px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 600px) {
+    .modal-content {
+        max-height: 95vh;
+    }
+    .badges-grid {
+        grid-template-columns: 1fr;
+    }
+    .title-slots-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
