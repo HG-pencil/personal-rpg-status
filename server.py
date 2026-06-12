@@ -72,7 +72,7 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 for f in os.listdir(DIRECTORY):
                     if f.startswith('status_') and f.endswith('.json'):
                         u = f[7:-5]
-                        if re.match(r'^[a-zA-Z0-9_-]+$', u):
+                        if re.match(r'^[a-zA-Z0-9_-]+$', u) and u != "tests":
                             users.add(u)
             
             self.send_response(200)
