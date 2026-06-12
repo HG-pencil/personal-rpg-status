@@ -66,20 +66,34 @@ def push_to_firestore(data):
         print(f"[!] クラウドへのデータ同期に失敗しました: {e}")
     return False
 
-def migrate_tickets(data):
+def migrate_data(data):
     if not data:
         return data
     tickets = data.setdefault("tickets", {})
     # 古い measurement キーがあれば all に変換して削除
     if "measurement" in tickets:
         tickets["all"] = tickets.get("all", 0) + tickets.pop("measurement", 0)
+        
+    # 新しいアチーブメント・自作称号データの初期設定
+    unlocked = data.setdefault("unlocked_achievements", [])
+    parts = data.setdefault("title_parts", [])
+    data.setdefault("custom_title", "")
+    data.setdefault("active_title_parts", [])
+    
+    # 初期実績の自動付与
+    if "ACH_FIRST_STEP" not in unlocked:
+        unlocked.append("ACH_FIRST_STEP")
+        for word in ["目覚めし人", "の"]:
+            if word not in parts:
+                parts.append(word)
+                
     return data
 
 def load_status(filepath):
     # まずクラウドからのプルを試みる
     cloud_data = pull_from_firestore()
     if cloud_data:
-        cloud_data = migrate_tickets(cloud_data)
+        cloud_data = migrate_data(cloud_data)
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
@@ -91,13 +105,77 @@ def load_status(filepath):
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
-            return migrate_tickets(local_data)
+            return migrate_data(local_data)
     except FileNotFoundError:
         print(f"エラー: データファイルが見つかりません: {filepath}")
         sys.exit(1)
     except json.JSONDecodeError:
         print(f"エラー: JSONファイルの解析に失敗しました: {filepath}")
         sys.exit(1)
+
+def check_achievements(base_path, data):
+    ach_filepath = os.path.join(base_path, "web", "status_achievements.json")
+    if not os.path.exists(ach_filepath):
+        return []
+
+    try:
+        with open(ach_filepath, 'r', encoding='utf-8') as f:
+            ach_master = json.load(f)
+    except Exception:
+        return []
+
+    status = data.setdefault("status", {})
+    unlocked = data.setdefault("unlocked_achievements", [])
+    parts = data.setdefault("title_parts", [])
+    history = data.setdefault("history", [])
+
+    newly_unlocked = []
+
+    for ach in ach_master:
+        ach_id = ach.get("id")
+        if ach_id in unlocked:
+            continue
+
+        # 条件判定
+        is_cleared = False
+        if ach_id == "ACH_FIRST_STEP":
+            is_cleared = True
+        elif ach_id == "ACH_AI_MASTER_200":
+            is_cleared = status.get("DEV", {}).get("current", 0) >= 200
+        elif ach_id == "ACH_FITNESS_300":
+            is_cleared = status.get("STR", {}).get("current", 0) >= 300 or status.get("VIT", {}).get("current", 0) >= 300
+        elif ach_id == "ACH_CONTINUITY_7":
+            is_cleared = len(data.get("reflected_dates", [])) >= 7
+        elif ach_id == "ACH_MIND_CONTROL":
+            is_cleared = status.get("MND", {}).get("current", 0) >= 300
+        elif ach_id == "ACH_CHARISMATIC_LEADER":
+            is_cleared = status.get("CHA", {}).get("current", 0) >= 280
+        elif ach_id == "ACH_LIMIT_BREAK":
+            is_cleared = any(v >= 100 for v in data.get("training", {}).values())
+
+        if is_cleared:
+            unlocked.append(ach_id)
+            reward_words = ach.get("reward_words", [])
+            added_words = []
+            for word in reward_words:
+                if word not in parts:
+                    parts.append(word)
+                    added_words.append(word)
+
+            newly_unlocked.append({
+                "name": ach.get("name"),
+                "words": added_words
+            })
+
+            # 履歴に追加
+            words_str = ", ".join(reward_words)
+            history.append({
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "event": f"Achievement Unlocked: {ach.get('name')} (Acquired words: {words_str})",
+                "status_change": {}
+            })
+
+    return newly_unlocked
 
 def save_json(filepath, data):
     # ローカルキャッシュの保存
@@ -355,6 +433,9 @@ def import_training_data(base_path, data, json_str):
             })
             tickets_earned_msg.append(f"[🎉 チケット獲得] {p}のトレーニング値が {new_val}pts に到達！「測定チケット({p})」を {tickets_earned}枚 獲得しました！")
 
+    # 実績解除のチェック
+    unlocked_list = check_achievements(base_path, data)
+
     # 旧合算カウンターは廃止しリセット
     data["accumulated_training_points"] = 0
     data["last_updated"] = datetime.now().isoformat()
@@ -372,6 +453,9 @@ def import_training_data(base_path, data, json_str):
     print(f" 新規累積ポイント: +{new_points_total} pts")
     for msg in tickets_earned_msg:
         print(f" {msg}")
+    for ach in unlocked_list:
+        words_str = "、".join([f"「{w}」" for w in ach["words"]])
+        print(f" [🎉 実績解除] 実績『{ach['name']}』を達成！ 報酬単語：{words_str} を獲得しました！")
     if hp_recovered_total > 0:
         print(f" [❤️ HP回復] 体調が整い、HPが {hp_recovered_total} 回復しました！(現在: {hp['current']}/{hp['max']})")
     print("======================================================================")

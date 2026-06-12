@@ -47,17 +47,20 @@ def main():
     else:
         style_details = "with a small traveler's backpack and a utility belt"
         
-    # 称号による装飾
+    # 自作称号による装飾（画像生成時のAI自身の自律解釈をサポート）
     title_suffix = ""
-    if active_titles:
+    custom_title = data.get("custom_title", "")
+    if custom_title:
+        title_suffix = f" acting out the custom title and dramatic situation of '{custom_title}'"
+    elif active_titles:
         title_suffix = f" representing the title '{active_titles[0]}'"
         
     # 最終的なプロンプトの構築（2頭身アニメ調のおっさん要素を明示）
     prompt = (
         f"16-bit retro game pixel art sprite of a friendly chibi style (2-head-tall) middle-aged uncle adventurer. "
-        f"The character is an approachable middle-aged man with a kind smile, a short neat beard, "
+        f"The character is an approachable middle-aged man with a short neat beard, "
         f"equipped with {gear_desc}, {style_details}{title_suffix}. "
-        f"Front-facing standing pose, full body, isolated on a clean solid dark gray background. "
+        f"Full body portrait, isolated on a clean solid dark gray background. "
         f"Vibrant colors, cute anime JRPG chibi character style, clear pixel lines."
     )
     

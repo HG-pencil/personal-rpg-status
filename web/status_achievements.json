@@ -1,0 +1,44 @@
+[
+  {
+    "id": "ACH_FIRST_STEP",
+    "name": "最初の一歩",
+    "desc": "人生RPG能力可視化システムを起動し、初期登録を完了する。",
+    "reward_words": ["目覚めし人", "の"]
+  },
+  {
+    "id": "ACH_AI_MASTER_200",
+    "name": "AIの先駆者",
+    "desc": "AI開発力（DEV）が 200 以上に到達する。",
+    "reward_words": ["電子", "サイバー", "しかし"]
+  },
+  {
+    "id": "ACH_FITNESS_300",
+    "name": "日々の鍛錬",
+    "desc": "筋力（STR）または持久（VIT）が 300 以上に到達する。",
+    "reward_words": ["騎士", "黄金"]
+  },
+  {
+    "id": "ACH_CONTINUITY_7",
+    "name": "継続の歩み",
+    "desc": "日次トレーニングを累計 7日 反映させる。",
+    "reward_words": ["雨宿り", "猫"]
+  },
+  {
+    "id": "ACH_MIND_CONTROL",
+    "name": "鋼の自制心",
+    "desc": "精神力（MND）が 300 以上に到達する。",
+    "reward_words": ["暁", "黄昏", "だ”"]
+  },
+  {
+    "id": "ACH_CHARISMATIC_LEADER",
+    "name": "人を惹きつける者",
+    "desc": "魅力（CHA）が 280 以上に到達する。",
+    "reward_words": ["た", "指揮官", "から"]
+  },
+  {
+    "id": "ACH_LIMIT_BREAK",
+    "name": "極限超越",
+    "desc": "任意のステータスのトレーニング値が 100 以上に到達する。",
+    "reward_words": ["マン", "限界", "を超えし"]
+  }
+]
