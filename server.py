@@ -65,7 +65,23 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(f.read().encode('utf-8'))
             else:
                 self.send_error(404, f"status_{user_id}.json not found")
+        elif api_path == '/api/users':
+            users = set()
+            users.add('kingo')
+            if os.path.exists(DIRECTORY):
+                for f in os.listdir(DIRECTORY):
+                    if f.startswith('status_') and f.endswith('.json'):
+                        u = f[7:-5]
+                        if re.match(r'^[a-zA-Z0-9_-]+$', u):
+                            users.add(u)
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"users": sorted(list(users))}).encode('utf-8'))
         elif api_path == '/api/tests':
+
             tests_path = os.path.join(DIRECTORY, 'status_tests.json')
             if os.path.exists(tests_path):
                 self.send_response(200)
