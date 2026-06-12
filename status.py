@@ -97,15 +97,19 @@ def load_status(filepath):
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cloud_data, f, ensure_ascii=False, indent=2)
+            export_to_notebooklm(cloud_data)
             return cloud_data
         except Exception:
+            export_to_notebooklm(cloud_data)
             return cloud_data
             
     # クラウドがオフラインならローカルキャッシュからロード
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             local_data = json.load(f)
-            return migrate_data(local_data)
+            local_data = migrate_data(local_data)
+            export_to_notebooklm(local_data)
+            return local_data
     except FileNotFoundError:
         print(f"エラー: データファイルが見つかりません: {filepath}")
         sys.exit(1)
@@ -177,6 +181,81 @@ def check_achievements(base_path, data):
 
     return newly_unlocked
 
+def export_to_notebooklm(data):
+    target_dir = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
+    if not os.path.exists(target_dir):
+        return
+        
+    # 1. status.json のコピー
+    try:
+        with open(os.path.join(target_dir, "status.json"), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[!] NotebookLM用JSONの書き出しに失敗しました: {e}")
+        
+    # 2. status_summary.md (要約Markdown) の生成と保存
+    try:
+        status = data.get("status", {})
+        hp = status.get("HP", {"current": 100, "max": 100})
+        titles = data.get("titles", {"active": []})
+        archetypes = data.get("archetypes", [])
+        
+        md_lines = []
+        md_lines.append("# 我部宏和（Kingo） RPG能力ステータスサマリー")
+        md_lines.append(f"最終同期日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        
+        md_lines.append("## 👤 ヒーロー基本ステータス")
+        md_lines.append(f"- **ビルド称号 / ランクスコア**: {data.get('build_score', 'Novice Build')} / {', '.join(titles.get('active', [])) if titles.get('active') else 'なし'}")
+        md_lines.append(f"- **戦闘力 (Combat Power)**: {data.get('combat_power', 0)}")
+        md_lines.append(f"- **HP (コンディション)**: {hp.get('current')}/{hp.get('max')}")
+        md_lines.append(f"- **職業 (Archetypes)**: {', '.join(archetypes) if archetypes else 'なし'}\n")
+        
+        md_lines.append("## 📊 能力値 (各パラメータ詳細)")
+        params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
+        param_names = {
+            "STR": "STR (筋力・身体出力)",
+            "VIT": "VIT (持久力・疲労耐性)",
+            "INT": "INT (論理思考・構造化)",
+            "WIS": "WIS (知識・教養)",
+            "MND": "MND (精神力・自己統制)",
+            "CHA": "CHA (魅力・信頼形成)",
+            "DEV": "DEV (開拓・AIシステム構築)"
+        }
+        for p in params:
+            val = status.get(p, {"current": 100, "peak": 100})
+            t_val = data.get("training", {}).get(p, 0)
+            md_lines.append(f"- **{param_names[p]}**: 現在値 {val.get('current')} / Peak値 {val.get('peak')} (努力累積: {t_val}pts)")
+        md_lines.append("")
+        
+        md_lines.append("## 🎫 所持チケット (測定アイテム)")
+        tickets = data.get("tickets", {})
+        has_tickets = False
+        for k, v in tickets.items():
+            if v > 0:
+                md_lines.append(f"- 測定チケット ({k}): {v}枚")
+                has_tickets = True
+        if not has_tickets:
+            md_lines.append("- なし (ゲート試験に挑戦中または未獲得)")
+        md_lines.append("")
+        
+        md_lines.append("## 🏆 解除済みアチーブメント (実績)")
+        unlocked = data.get("unlocked_achievements", [])
+        md_lines.append(f"解除数: {len(unlocked)}個")
+        for ach_id in unlocked:
+            md_lines.append(f"- {ach_id}")
+        md_lines.append("")
+        
+        md_lines.append("## 📜 活動記録・イベント履歴 (History)")
+        history = data.get("history", [])[-20:] # 直近20件を書き出し
+        for h in reversed(history):
+            md_lines.append(f"- **{h.get('date')}**: {h.get('event')}")
+            
+        md_content = "\n".join(md_lines)
+        with open(os.path.join(target_dir, "status_summary.md"), "w", encoding="utf-8") as f:
+            f.write(md_content)
+    except Exception as e:
+        print(f"[!] NotebookLM用サマリーMarkdownの書き出しに失敗しました: {e}")
+
 def save_json(filepath, data):
     # ローカルキャッシュの保存
     try:
@@ -184,6 +263,9 @@ def save_json(filepath, data):
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"エラー: ファイルの保存に失敗しました: {e}")
+        
+    # NotebookLM用自動エクスポート
+    export_to_notebooklm(data)
         
     # クラウド同期
     push_to_firestore(data)
