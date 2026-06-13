@@ -7,7 +7,7 @@ def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
 
 def pull_from_firestore():
-    url = "https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/kingo"
+    url = "https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/HG_pencil"
     try:
         req = urllib.request.Request(url, method='GET')
         with urllib.request.urlopen(req, timeout=5) as res:
@@ -50,8 +50,8 @@ def main():
         print("CHANGE_DETECTED")
         print(f"NEW_TITLE:{custom_title}")
         
-        # ローカルキャッシュ status.json に同期
-        status_json_path = os.path.join(base_path, "status.json")
+        # ローカルキャッシュ status_HG_pencil.json に同期
+        status_json_path = os.path.join(base_path, "status_HG_pencil.json")
         try:
             with open(status_json_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)

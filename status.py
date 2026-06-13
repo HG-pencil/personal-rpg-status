@@ -230,7 +230,7 @@ def generate_roadmap_events(roadmap, status_data):
                 })
     return events
 
-def parse_monthly_goals(user_id="kingo"):
+def parse_monthly_goals(user_id="HG_pencil"):
     target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
     file_path = os.path.join(target_base, user_id, "今月の目標.txt")
     if not os.path.exists(file_path):
@@ -311,7 +311,7 @@ def parse_monthly_goals(user_id="kingo"):
         print(f"[!] 今月の目標のパースに失敗しました: {e}")
         return []
 
-def parse_roadmap(user_id="kingo"):
+def parse_roadmap(user_id="HG_pencil"):
     target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
     file_path = os.path.join(target_base, user_id, "ロードマップ.txt")
     if not os.path.exists(file_path):
@@ -387,7 +387,7 @@ def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def pull_from_firestore(user_id="kingo"):
+def pull_from_firestore(user_id="HG_pencil"):
     url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
     try:
         import urllib.request
@@ -402,7 +402,7 @@ def pull_from_firestore(user_id="kingo"):
         print(f"[!] クラウドからのデータ取得に失敗しました (オフライン動作): {e}")
     return None
 
-def push_to_firestore(data, user_id="kingo"):
+def push_to_firestore(data, user_id="HG_pencil"):
     url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
     try:
         import urllib.request
@@ -456,7 +456,7 @@ def migrate_data(data):
                 
     return data
 
-def load_status(filepath, user_id="kingo"):
+def load_status(filepath, user_id="HG_pencil"):
     # まずクラウドからのプルを試みる
     cloud_data = pull_from_firestore(user_id)
     
@@ -666,7 +666,7 @@ def check_achievements(base_path, data):
 
     return newly_unlocked
 
-def export_to_notebooklm(data, user_id="kingo"):
+def export_to_notebooklm(data, user_id="HG_pencil"):
     target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
     if not os.path.exists(target_base):
         return
@@ -749,7 +749,7 @@ def export_to_notebooklm(data, user_id="kingo"):
     except Exception as e:
         print(f"[!] NotebookLM用サマリーMarkdownの書き出しに失敗しました: {e}")
 
-def save_json(filepath, data, user_id="kingo"):
+def save_json(filepath, data, user_id="HG_pencil"):
     # ローカルキャッシュの保存
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -763,7 +763,7 @@ def save_json(filepath, data, user_id="kingo"):
     # クラウド同期
     push_to_firestore(data, user_id)
 
-def print_status_cli(data):
+def print_status_cli(data, user_id="HG_pencil"):
     status = data.get("status", {})
     training = data.get("training", {})
     tickets = data.get("tickets", {})
@@ -788,7 +788,7 @@ def print_status_cli(data):
     print("======================================================================")
     print("                    * ANTIGRAVITY STATUS *")
     print("======================================================================")
-    print(f" USER: kingo [{build_score}]")
+    print(f" USER: {user_id} [{build_score}]")
     print(f" Combat Power: {combat_power}")
     
     # HPバー表示 (20文字分)
@@ -916,7 +916,7 @@ def get_next_gate(current_val):
     eligible_gates = [g for g in gates if g > current_val]
     return eligible_gates[0] if eligible_gates else 999
 
-def import_training_data(base_path, data, json_str, user_id="kingo"):
+def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
     if json_str == "-":
         import sys
         json_str = sys.stdin.read()
@@ -1034,7 +1034,7 @@ def import_training_data(base_path, data, json_str, user_id="kingo"):
         print(f" [❤️ HP回復] 体調が整い、HPが {hp_recovered_total} 回復しました！(現在: {hp['current']}/{hp['max']})")
     print("======================================================================")
 
-def run_test_mode(base_path, status_data, user_id="kingo"):
+def run_test_mode(base_path, status_data, user_id="HG_pencil"):
     tests_filepath = os.path.join(base_path, "status_tests.json")
     if not os.path.exists(tests_filepath):
         print(f"\n[!] テスト問題ファイルが見つかりません: {tests_filepath}")
@@ -1254,7 +1254,7 @@ def main():
     parser.add_argument("--test", "-t", action="store_true", help="ランクゲート測定試験モードを起動します")
     parser.add_argument("--web", "-w", action="store_true", help="ローカルWebダッシュボードをブラウザで開きます")
     parser.add_argument("--import-training", "-p", type=str, help="トレーニングデータを反映します (JSON文字列形式)")
-    parser.add_argument("--user", "-u", type=str, default="kingo", help="セーブデータのユーザーIDを指定します (デフォルト: kingo)")
+    parser.add_argument("--user", "-u", type=str, default="HG_pencil", help="セーブデータのユーザーIDを指定します (デフォルト: HG_pencil)")
     args = parser.parse_args()
     
     base_path = get_base_path()
@@ -1271,7 +1271,7 @@ def main():
         launch_web_server(base_path)
     else:
         # ステータスの表示
-        print_status_cli(data)
+        print_status_cli(data, user_id)
         
         # オプション処理
         if args.image:

@@ -41,16 +41,16 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
         parsed_path = urlparse(self.path)
         api_path = parsed_path.path
         query = parse_qs(parsed_path.query)
-        user_id = query.get('user', ['kingo'])[0]
+        user_id = query.get('user', ['HG_pencil'])[0]
         
         # 安全なユーザーIDバリデーション
         if not re.match(r'^[a-zA-Z0-9_-]+$', user_id):
-            user_id = "kingo"
+            user_id = "HG_pencil"
 
         # APIエンドポイントのハンドリング
         if api_path == '/api/status':
             status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
-            if not os.path.exists(status_path) and user_id == "kingo":
+            if not os.path.exists(status_path) and user_id == "HG_pencil":
                 # 従来ファイルへのフォールバック
                 fallback_path = os.path.join(DIRECTORY, 'status.json')
                 if os.path.exists(fallback_path):
@@ -67,7 +67,7 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(404, f"status_{user_id}.json not found")
         elif api_path == '/api/users':
             users = set()
-            users.add('kingo')
+            users.add('HG_pencil')
             if os.path.exists(DIRECTORY):
                 for f in os.listdir(DIRECTORY):
                     if f.startswith('status_') and f.endswith('.json'):
@@ -116,11 +116,11 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
         parsed_path = urlparse(self.path)
         api_path = parsed_path.path
         query = parse_qs(parsed_path.query)
-        user_id = query.get('user', ['kingo'])[0]
+        user_id = query.get('user', ['HG_pencil'])[0]
         
         # 安全なユーザーIDバリデーション
         if not re.match(r'^[a-zA-Z0-9_-]+$', user_id):
-            user_id = "kingo"
+            user_id = "HG_pencil"
 
         # 試験回答提出 API エンドポイント
         if api_path == '/api/submit_test':
@@ -160,7 +160,7 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 
                 # 測定チケットの消費 ＆ status_{user_id}.json 履歴更新
                 status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
-                if not os.path.exists(status_path) and user_id == "kingo":
+                if not os.path.exists(status_path) and user_id == "HG_pencil":
                     fallback_path = os.path.join(DIRECTORY, 'status.json')
                     if os.path.exists(fallback_path):
                         status_path = fallback_path
@@ -304,7 +304,7 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if passed:
                     # チケット回復 ＆ status_{user_id}.json 履歴更新
                     status_path = os.path.join(DIRECTORY, f'status_{user_id}.json')
-                    if not os.path.exists(status_path) and user_id == "kingo":
+                    if not os.path.exists(status_path) and user_id == "HG_pencil":
                         fallback_path = os.path.join(DIRECTORY, 'status.json')
                         if os.path.exists(fallback_path):
                             status_path = fallback_path

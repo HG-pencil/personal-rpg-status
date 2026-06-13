@@ -12,9 +12,9 @@ const firebaseConfig = {
 // Initialize Firebase Compat
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-let currentUserId = localStorage.getItem('rpg_user_id') || 'kingo';
+let currentUserId = localStorage.getItem('rpg_user_id') || 'HG_pencil';
 let userDocRef = db.collection('users').doc(currentUserId);
-let userList = ['kingo'];
+let userList = ['HG_pencil'];
 
 
 // グローバル変数

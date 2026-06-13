@@ -1,7 +1,7 @@
 $TaskName = "Antigravity_RPG_Sync"
 $PythonPath = "python.exe"
 $ScriptPath = "F:\Google Antigravity\projects\personal-rpg-status\status.py"
-$Arguments = "--user kingo"
+$Arguments = "--user HG_pencil"
 
 # Remove existing task if any
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
