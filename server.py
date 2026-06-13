@@ -170,20 +170,35 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                         status_data = json.load(f)
                     
                     is_training_task = submitted_answer.get("test_id", "").startswith("TRAIN-")
+                    test_type = submitted_answer.get("test_type", "gate")
+                    is_measurement = (test_type == "measurement")
                     
                     tickets = status_data.get("tickets", {})
-                    curr_tickets = tickets.get("measurement", 0)
                     
-                    # 通常の試験の場合のみチケットを消費
-                    if not is_training_task and curr_tickets > 0:
-                        tickets["measurement"] = curr_tickets - 1
+                    # 測定チケットの消費（通常のゲート試験の場合のみ消費）
+                    if not is_training_task and not is_measurement:
+                        curr_tickets = tickets.get("measurement", 0)
+                        if curr_tickets > 0:
+                            tickets["measurement"] = curr_tickets - 1
+                        
+                        param = submitted_answer.get("param")
+                        if param:
+                            if tickets.get(param, 0) > 0:
+                                tickets[param] -= 1
+                            elif tickets.get("all", 0) > 0:
+                                tickets["all"] -= 1
                         
                     # 履歴追加
                     history = status_data.get("history", [])
-                    elapsed_min = round(submitted_answer["elapsed_seconds"] / 60, 1)
-                    status_str = "TIMEOUT" if submitted_answer["timeout"] else "COMPLETED"
+                    elapsed_min = round(submitted_answer.get("elapsed_seconds", 0) / 60, 1)
+                    status_str = "TIMEOUT" if submitted_answer.get("timeout", False) else "COMPLETED"
                     
-                    event_prefix = "Training Mission Submitted" if is_training_task else "Exam Answer Submitted"
+                    if is_training_task:
+                        event_prefix = "Training Mission Submitted"
+                    elif is_measurement:
+                        event_prefix = "Measurement Test Submitted"
+                    else:
+                        event_prefix = "Exam Answer Submitted"
                     
                     history.append({
                         "date": datetime.now().strftime("%Y-%m-%d"),

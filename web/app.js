@@ -625,17 +625,39 @@ function loadAvailableTests() {
             return res.json();
         })
         .then(allTests => {
-            let availableCount = 0;
+            let gateTests = [];
+            let measurementTests = [];
             
             allTests.forEach(test => {
+                if (test.is_training) return;
                 const param = test.param;
                 const targetGate = test.target_gate;
                 const pData = status[param] || { current: 100 };
                 const currVal = pData.current;
                 
-                // 次の壁とテストのターゲットゲートが一致しているか判定 (通常試験のみ)
-                if (!test.is_training && getNextGate(currVal) === targetGate) {
-                    availableCount++;
+                if (getNextGate(currVal) === targetGate) {
+                    test.test_type = 'gate';
+                    gateTests.push(test);
+                } else if (targetGate <= currVal) {
+                    test.test_type = 'measurement';
+                    measurementTests.push(test);
+                }
+            });
+            
+            let html = '';
+            
+            // 1. ゲート試験の描画
+            html += `
+                <div style="width: 100%; text-align: left; margin-bottom: 8px; margin-top: 12px;">
+                    <h4 style="font-family: var(--font-pixel); font-size: 0.75rem; color: var(--accent-red);">🛡️ ランクゲート試験 (チケットが必要)</h4>
+                </div>
+            `;
+            if (gateTests.length === 0) {
+                html += '<div class="advisory-item-web">現在挑戦可能なゲート試験はありません。</div>';
+            } else {
+                gateTests.forEach(test => {
+                    const param = test.param;
+                    const targetGate = test.target_gate;
                     const timeMin = test.time_limit_seconds / 60;
                     
                     const hasSpecific = tickets[param] && tickets[param] > 0;
@@ -646,7 +668,7 @@ function loadAvailableTests() {
                         ? `<span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能</span>` 
                         : `<span class="meta-diff" style="color: var(--accent-red);">チケット不足</span>`;
                     
-                    const cardHtml = `
+                    html += `
                         <div class="test-select-card" style="${!hasTicket ? 'opacity: 0.6; border-color: rgba(255,255,255,0.02);' : ''}">
                             <div class="test-card-left">
                                 <div class="test-card-title">${param} -> ${targetGate} ゲート試験</div>
@@ -659,13 +681,40 @@ function loadAvailableTests() {
                             <button class="btn btn-primary" ${!hasTicket ? 'disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed;"' : ''} onclick="startTest('${test.id}')">試験開始</button>
                         </div>
                     `;
-                    container.insertAdjacentHTML('beforeend', cardHtml);
-                }
-            });
-            
-            if (availableCount === 0) {
-                container.innerHTML = '<div class="advisory-item-web">現在、あなたの次の能力上限値に適合するゲート試験が定義されていません。</div>';
+                });
             }
+            
+            // 2. 実力測定試験の描画
+            html += `
+                <div style="width: 100%; text-align: left; margin-bottom: 8px; margin-top: 20px;">
+                    <h4 style="font-family: var(--font-pixel); font-size: 0.75rem; color: var(--accent-blue);">🔍 実力測定試験 (チケット不要)</h4>
+                </div>
+            `;
+            if (measurementTests.length === 0) {
+                html += '<div class="advisory-item-web">挑戦可能な実力測定試験はありません。</div>';
+            } else {
+                measurementTests.forEach(test => {
+                    const param = test.param;
+                    const targetGate = test.target_gate;
+                    const timeMin = test.time_limit_seconds / 60;
+                    
+                    html += `
+                        <div class="test-select-card">
+                            <div class="test-card-left">
+                                <div class="test-card-title">${param} -> ${targetGate} レベル測定</div>
+                                <div class="test-card-meta">
+                                    <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${test.difficulty}</span></span>
+                                    <span>制限時間: <span class="meta-time">${timeMin} 分</span></span>
+                                    <span>状態: <span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能 (フリー)</span></span>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" style="background: var(--accent-blue); border-color: var(--accent-blue);" onclick="startTest('${test.id}')">測定開始</button>
+                        </div>
+                    `;
+                });
+            }
+            
+            container.innerHTML = html;
         })
         .catch(err => {
             console.error(err);
@@ -687,10 +736,16 @@ function startTest(testId) {
                 return;
             }
             
-            // チケットの有無チェック (追試ミッションでない場合)
-            if (!isTrainingTask) {
+            const status = cachedStatusData.status || {};
+            const param = test.param;
+            const targetGate = test.target_gate;
+            const pData = status[param] || { current: 100 };
+            const currVal = pData.current;
+            const isMeasurement = !test.is_training && targetGate <= currVal;
+            
+            // チケットの有無チェック (追試ミッションおよび実力測定試験でない場合)
+            if (!isTrainingTask && !isMeasurement) {
                 const tickets = cachedStatusData.tickets || {};
-                const param = test.param;
                 const hasSpecific = tickets[param] && tickets[param] > 0;
                 const hasAll = tickets.all && tickets.all > 0;
                 if (!hasSpecific && !hasAll) {
@@ -699,7 +754,7 @@ function startTest(testId) {
                 }
             }
             
-            activeTest = test;
+            activeTest = { ...test, test_type: isMeasurement ? 'measurement' : 'gate' };
             testSecondsTotal = test.time_limit_seconds;
             testSecondsRemaining = testSecondsTotal;
             
@@ -726,7 +781,7 @@ function startTest(testId) {
                     submitBtn.innerText = "コードを実行してテスト判定";
                     submitBtn.setAttribute("onclick", "judgeTrainingCode()");
                 } else {
-                    submitBtn.innerText = "解答を提出する";
+                    submitBtn.innerText = isMeasurement ? "測定の解答を提出する" : "解答を提出する";
                     submitBtn.setAttribute("onclick", "submitTestAnswer()");
                 }
             }
@@ -793,9 +848,11 @@ function submitTestAnswer(isTimeout = false) {
     // 現在のキャッシュデータをコピーして書き換え
     const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
     
-    // チケット消費（優先度：専用 ➡️ all）
+    const isMeasurement = (activeTest.test_type === 'measurement');
+    
+    // チケット消費（ゲート試験の場合のみ、優先度：専用 ➡️ all）
     const param = activeTest.param;
-    if (updatedData.tickets) {
+    if (!isMeasurement && updatedData.tickets) {
         if (updatedData.tickets[param] && updatedData.tickets[param] > 0) {
             updatedData.tickets[param]--;
         } else if (updatedData.tickets.all && updatedData.tickets.all > 0) {
@@ -809,9 +866,10 @@ function submitTestAnswer(isTimeout = false) {
     
     // 履歴追加
     if (!updatedData.history) updatedData.history = [];
+    const eventPrefix = isMeasurement ? "Measurement Test Submitted" : "Exam Answer Submitted";
     updatedData.history.push({
         "date": getTodayString(),
-        "event": `Exam Answer Submitted: ${activeTest.id} (${statusStr} in ${elapsedMin}m)`,
+        "event": `${eventPrefix}: ${activeTest.id} (${statusStr} in ${elapsedMin}m)`,
         "status_change": {}
     });
     
@@ -821,6 +879,7 @@ function submitTestAnswer(isTimeout = false) {
         "test_id": activeTest.id,
         "param": activeTest.param,
         "target_gate": activeTest.target_gate,
+        "test_type": activeTest.test_type || "gate",
         "answer": answerText,
         "elapsed_seconds": elapsed,
         "timeout": isTimeout,
@@ -836,8 +895,10 @@ function submitTestAnswer(isTimeout = false) {
     .then(() => {
         // 通常試験完了時の表示を初期状態に戻す
         document.querySelector('#test-complete-view .complete-icon').innerText = "📝";
-        document.querySelector('#test-complete-view .complete-title').innerText = "解答提出完了";
-        document.querySelector('#test-complete-view .complete-desc').innerText = "解答がクラウドに保存されました！";
+        document.querySelector('#test-complete-view .complete-title').innerText = isMeasurement ? "測定提出完了" : "解答提出完了";
+        document.querySelector('#test-complete-view .complete-desc').innerText = isMeasurement 
+            ? "実力測定の解答がクラウドに保存されました！" 
+            : "解答がクラウドに保存されました！";
         
         const descSubs = document.querySelectorAll('#test-complete-view .complete-desc-sub');
         if (descSubs.length >= 3) {
@@ -851,7 +912,9 @@ function submitTestAnswer(isTimeout = false) {
         
         // クリップボードへ「採点依頼メッセージ」を自動コピー
         if (navigator.clipboard) {
-            const copyText = `${activeTest.param} ${activeTest.target_gate} の試験を提出しました。採点をお願いします！`;
+            const copyText = isMeasurement
+                ? `${activeTest.param} ${activeTest.target_gate} の実力測定試験を提出しました。採点をお願いします！`
+                : `${activeTest.param} ${activeTest.target_gate} の試験を提出しました。採点をお願いします！`;
             navigator.clipboard.writeText(copyText)
                 .then(() => console.log('Clipboard copy success'))
                 .catch(err => console.error('Clipboard copy failed', err));
@@ -871,16 +934,20 @@ function submitTestAnswer(isTimeout = false) {
 }
 
 function abandonTest() {
-    const confirmAbandon = confirm("本当に試験を諦めますか？チケットは消費され、今回の試験は「不合格（タイムアウト）」扱いとなります。");
+    const isMeasurement = (activeTest.test_type === 'measurement');
+    const confirmMsg = isMeasurement 
+        ? "本当に実力測定を諦めますか？" 
+        : "本当に試験を諦めますか？チケットは消費され、今回の試験は「不合格（タイムアウト）」扱いとなります。";
+    const confirmAbandon = confirm(confirmMsg);
     if (!confirmAbandon) return;
     
     if (testTimerInterval) clearInterval(testTimerInterval);
     
     const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
     
-    // チケット消費（優先度：専用 ➡️ all）
+    // チケット消費（ゲート試験の場合のみ、優先度：専用 ➡️ all）
     const param = activeTest.param;
-    if (updatedData.tickets) {
+    if (!isMeasurement && updatedData.tickets) {
         if (updatedData.tickets[param] && updatedData.tickets[param] > 0) {
             updatedData.tickets[param]--;
         } else if (updatedData.tickets.all && updatedData.tickets.all > 0) {
@@ -893,9 +960,10 @@ function abandonTest() {
     
     // 履歴追加
     if (!updatedData.history) updatedData.history = [];
+    const eventPrefix = isMeasurement ? "Measurement Test Abandoned" : "Exam Abandoned";
     updatedData.history.push({
         "date": getTodayString(),
-        "event": `Exam Abandoned: ${activeTest.id} (TIMEOUT in ${elapsedMin}m)`,
+        "event": `${eventPrefix}: ${activeTest.id} (TIMEOUT in ${elapsedMin}m)`,
         "status_change": {}
     });
     
@@ -905,7 +973,8 @@ function abandonTest() {
         "test_id": activeTest.id,
         "param": activeTest.param,
         "target_gate": activeTest.target_gate,
-        "answer": "[試験中止] ユーザーにより試験が自己中断されました。",
+        "test_type": activeTest.test_type || "gate",
+        "answer": isMeasurement ? "[実力測定中止] ユーザーにより測定が自己中断されました。" : "[試験中止] ユーザーにより試験が自己中断されました。",
         "elapsed_seconds": elapsed,
         "timeout": true,
         "submitted_at": new Date().toISOString()

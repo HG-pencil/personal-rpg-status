@@ -1048,12 +1048,19 @@ def run_test_mode(base_path, status_data, user_id="kingo"):
 
     available_tests = []
     for test in all_tests:
+        if test.get("is_training"):
+            continue
         param = test.get("param")
         target_gate = test.get("target_gate")
         p_data = status.get(param, {"current": 100})
         curr_val = p_data.get("current", 100)
         
-        if get_next_gate(curr_val) == target_gate:
+        next_gate = get_next_gate(curr_val)
+        if target_gate == next_gate:
+            test["test_type"] = "gate"
+            available_tests.append(test)
+        elif target_gate <= curr_val:
+            test["test_type"] = "measurement"
             available_tests.append(test)
 
     if not available_tests:
@@ -1072,10 +1079,17 @@ def run_test_mode(base_path, status_data, user_id="kingo"):
     print(" 挑戦可能な試験一覧:")
     for idx, test in enumerate(available_tests, 1):
         param = test.get("param")
+        target_gate = test.get("target_gate")
         time_min = test.get("time_limit_seconds", 0) // 60
-        has_t = tickets.get(param, 0) > 0 or tickets.get("all", 0) > 0
-        t_status = "" if has_t else " ⚠️ (チケット不足)"
-        print(f"  [{idx}] {param} -> {test.get('target_gate')} ゲート試験{t_status}")
+        test_type = test.get("test_type", "gate")
+        
+        if test_type == "measurement":
+            print(f"  [{idx}] 【実力測定】 {param} -> {target_gate} レベル実力測定 (チケット不要)")
+        else:
+            has_t = tickets.get(param, 0) > 0 or tickets.get("all", 0) > 0
+            t_status = " (チケット消費: 1枚)" if has_t else " ⚠️ (チケット不足・挑戦不可)"
+            print(f"  [{idx}] 【ゲート試験】 {param} -> {target_gate} ゲート突破試験{t_status}")
+            
         print(f"      (難易度: {test.get('difficulty')}, 制限時間: {time_min}分)")
     print("----------------------------------------------------------------------")
     
@@ -1097,19 +1111,27 @@ def run_test_mode(base_path, status_data, user_id="kingo"):
     param = selected_test.get("param")
     gate = selected_test.get("target_gate")
     limit_sec = selected_test.get("time_limit_seconds", 0)
+    test_type = selected_test.get("test_type", "gate")
+    is_measurement = (test_type == "measurement")
     
-    # チケットの有無チェック
-    has_specific = tickets.get(param, 0) > 0
-    has_all = tickets.get("all", 0) > 0
-    if not has_specific and not has_all:
-        print(f"\n [!] 測定チケット({param}) または 測定チケット(all) が不足しています。")
-        return
+    # チケットの有無チェック（ゲート試験の場合のみ）
+    if not is_measurement:
+        has_specific = tickets.get(param, 0) > 0
+        has_all = tickets.get("all", 0) > 0
+        if not has_specific and not has_all:
+            print(f"\n [!] 測定チケット({param}) または 測定チケット(all) が不足しています。")
+            return
 
     print("\n======================================================================")
-    print(f" 【警告】これより {param} の {gate}ゲート試験を開始します。")
-    print(f" 制限時間: {limit_sec // 60}分 ({limit_sec}秒)")
-    print(" 开始するとタイマーが作動し、チケットを1枚消費します。")
-    print(" 中断した場合もチケットは消費されますのでご注意ください。")
+    if is_measurement:
+        print(f" 【測定】これより {param} の {gate}レベル実力測定試験を開始します。")
+        print(f" 制限時間: {limit_sec // 60}分 ({limit_sec}秒)")
+        print(" ※実力測定のため、チケットは消費されません。")
+    else:
+        print(f" 【警告】これより {param} の {gate}ゲート試験を開始します。")
+        print(f" 制限時間: {limit_sec // 60}分 ({limit_sec}秒)")
+        print(" 開始するとタイマーが作動し、チケットを1枚消費します。")
+        print(" 中断した場合もチケットは消費されますのでご注意ください。")
     print("======================================================================")
     
     confirm = input(" 試験を開始しますか？ (y/n): ").strip().lower()
@@ -1117,17 +1139,23 @@ def run_test_mode(base_path, status_data, user_id="kingo"):
         print(" 開始を中止しました。")
         return
 
-    # チケット消費（優先度：専用 ➡️ all）
+    # チケット消費（ゲート試験の場合のみ、優先度：専用 ➡️ all）
     consumed_type = ""
-    if tickets.get(param, 0) > 0:
-        tickets[param] -= 1
-        consumed_type = f"専用チケット({param})"
-    elif tickets.get("all", 0) > 0:
-        tickets["all"] -= 1
-        consumed_type = "万能チケット(all)"
+    if is_measurement:
+        consumed_type = "なし (実力測定試験のためチケット不要)"
+    else:
+        if tickets.get(param, 0) > 0:
+            tickets[param] -= 1
+            consumed_type = f"専用チケット({param})"
+        elif tickets.get("all", 0) > 0:
+            tickets["all"] -= 1
+            consumed_type = "万能チケット(all)"
 
     save_json(os.path.join(base_path, f"status_{user_id}.json"), status_data, user_id)
-    print(f"\n[+] {consumed_type}を1枚消費しました。")
+    if is_measurement:
+        print(f"\n[+] 実力測定試験を開始します (チケット不要)。")
+    else:
+        print(f"\n[+] {consumed_type}を1枚消費しました。")
     print("----------------------------------------------------------------------")
     print("【問題】")
     print(selected_test.get("question"))
@@ -1176,6 +1204,7 @@ def run_test_mode(base_path, status_data, user_id="kingo"):
         "test_id": selected_test.get("id"),
         "param": param,
         "target_gate": gate,
+        "test_type": test_type,
         "submitted_at": datetime.now().isoformat(),
         "elapsed_seconds": round(elapsed, 1),
         "time_limit_seconds": limit_sec,
