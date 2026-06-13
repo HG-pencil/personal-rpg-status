@@ -471,45 +471,8 @@
                 </div>
                 <div class="modal-footer" style="padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
                     <button class="btn btn-primary" onclick="loginUser()" style="width: 100%; padding: 12px; font-family: 'Press Start 2P', cursive; font-size: 0.7rem; background: linear-gradient(135deg, #00d2ff, #0066ff); border: none; box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.5); cursor: pointer; border-radius: 6px; font-weight: bold; color: #fff;">LOGIN</button>
-                    <!-- 新規登録導線を非表示化 (管理者登録制への移行) -->
-                    <!--
-                    <div style="text-align: center; font-size: 0.75rem; font-family: 'Noto Sans JP', sans-serif; color: var(--text-secondary);">
-                        アカウントをお持ちでないですか？ 
-                        <a href="javascript:void(0)" onclick="toggleAuthView(true)" style="color: var(--accent-blue); text-decoration: underline; font-weight: bold; margin-left: 5px;">新規登録</a>
-                    </div>
-                    -->
                 </div>
             </div>
-
-            <!-- 2. 新規登録（サインアップ）ビュー (管理者登録制移行に伴いコメントアウト) -->
-            <!--
-            <div id="auth-signup-view" style="display: none;">
-                <div class="modal-header" style="justify-content: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
-                    <h3 class="modal-title" style="font-family: 'Press Start 2P', cursive; font-size: 0.85rem; text-align: center; color: var(--accent-blue); text-shadow: 0 0 10px rgba(0, 210, 255, 0.5); margin: 0;">🆕 CREATE ACCOUNT</h3>
-                </div>
-                <div class="modal-body" style="padding: 0;">
-                    <div style="margin-bottom: 18px;">
-                        <label style="display: block; font-size: 0.75rem; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; font-family: 'Outfit', sans-serif; letter-spacing: 1px;">EMAIL ADDRESS</label>
-                        <input type="email" id="signup-email" class="test-textarea" style="height: 40px; padding: 10px 12px; font-size: 0.9rem; width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; color: #fff; outline: none; transition: all 0.3s; font-family: 'Outfit', sans-serif;" placeholder="new-adventurer@example.com">
-                    </div>
-                    <div style="margin-bottom: 18px;">
-                        <label style="display: block; font-size: 0.75rem; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; font-family: 'Outfit', sans-serif; letter-spacing: 1px;">PASSWORD (6文字以上)</label>
-                        <input type="password" id="signup-password" class="test-textarea" style="height: 40px; padding: 10px 12px; font-size: 0.9rem; width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; color: #fff; outline: none; transition: all 0.3s; font-family: 'Outfit', sans-serif;" placeholder="••••••••">
-                    </div>
-                    <div style="margin-bottom: 24px;">
-                        <label style="display: block; font-size: 0.75rem; font-weight: bold; color: var(--text-secondary); margin-bottom: 6px; font-family: 'Outfit', sans-serif; letter-spacing: 1px;">CONFIRM PASSWORD</label>
-                        <input type="password" id="signup-confirm-password" class="test-textarea" style="height: 40px; padding: 10px 12px; font-size: 0.9rem; width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; color: #fff; outline: none; transition: all 0.3s; font-family: 'Outfit', sans-serif;" placeholder="••••••••">
-                    </div>
-                </div>
-                <div class="modal-footer" style="padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
-                    <button class="btn btn-primary" onclick="registerUser()" style="width: 100%; padding: 12px; font-family: 'Press Start 2P', cursive; font-size: 0.7rem; background: linear-gradient(135deg, #00d2ff, #0066ff); border: none; box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.5); cursor: pointer; border-radius: 6px; font-weight: bold; color: #fff;">REGISTER</button>
-                    <div style="text-align: center; font-size: 0.75rem; font-family: 'Noto Sans JP', sans-serif; color: var(--text-secondary);">
-                        すでにアカウントをお持ちですか？ 
-                        <a href="javascript:void(0)" onclick="toggleAuthView(false)" style="color: var(--accent-blue); text-decoration: underline; font-weight: bold; margin-left: 5px;">ログイン</a>
-                    </div>
-                </div>
-            </div>
-            -->
             
             <!-- 共通エラー表示領域 -->
             <div id="auth-error-msg" style="display: none; color: #ff5555; font-size: 0.75rem; margin-top: 15px; font-family: 'Noto Sans JP', sans-serif; line-height: 1.4; background: rgba(255, 85, 85, 0.1); border: 1px solid rgba(255, 85, 85, 0.3); padding: 8px 12px; border-radius: 4px; text-align: left;"></div>

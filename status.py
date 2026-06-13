@@ -419,15 +419,7 @@ def load_auth_config():
             "uid": env_uid
         }
         
-    # 2. 環境変数がない場合は config_auth.json からロード (下位互換フォールバック)
-    base_path = get_base_path()
-    config_path = os.path.join(base_path, "config_auth.json")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[!] 認証設定ファイルの読み込みに失敗しました: {e}")
+    print("[!] 警告: 認証用環境変数 (RPG_EMAIL, RPG_PASSWORD) が設定されていません。")
     return None
 
 def get_auth_token(email, password):
@@ -758,6 +750,8 @@ def load_status(filepath, user_id="HG_pencil"):
             existing_history_events = {h.get("event") for h in history}
             training = cloud_data.setdefault("training", {p: 0 for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]})
             tickets = cloud_data.setdefault("tickets", {})
+            status = cloud_data.setdefault("status", {})
+            hp = status.setdefault("HP", {"current": 100, "max": 100})
             
             for q in all_quests:
                 if q["title"] in completed_titles or q.get("original_title") in completed_originals:
@@ -788,6 +782,25 @@ def load_status(filepath, user_id="HG_pencil"):
                                         "status_change": {}
                                     })
                                     
+                        # 休息クエストかどうかの判定
+                        q_title = q.get("title", "")
+                        q_desc = q.get("description", "")
+                        q_orig = q.get("original_title", "")
+                        search_q = (q_title + " " + q_desc + " " + q_orig).lower()
+                        rest_keywords = ["休息", "休養", "睡眠", "リフレッシュ", "デトックス", "温泉", "マッサージ", "日常メンテナンス"]
+                        is_rest_quest = any(k in search_q for k in rest_keywords)
+                        
+                        if is_rest_quest:
+                            old_hp = hp.get("current", 100)
+                            hp["current"] = min(hp.get("max", 100), hp.get("current", 100) + 50)
+                            hp_recovered = hp["current"] - old_hp
+                            if hp_recovered > 0:
+                                history.append({
+                                    "date": datetime.now().strftime("%Y-%m-%d"),
+                                    "event": f"HP Recovered: +{hp_recovered} HP (Rest Quest: {q['title']})",
+                                    "status_change": {}
+                                })
+
                         # 履歴に追加して重複を防止
                         history.append({
                             "date": datetime.now().strftime("%Y-%m-%d"),
@@ -830,6 +843,8 @@ def load_status(filepath, user_id="HG_pencil"):
                 existing_history_events = {h.get("event") for h in history}
                 training = local_data.setdefault("training", {p: 0 for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]})
                 tickets = local_data.setdefault("tickets", {})
+                status = local_data.setdefault("status", {})
+                hp = status.setdefault("HP", {"current": 100, "max": 100})
                 
                 for q in all_quests:
                     if q["title"] in completed_titles or q.get("original_title") in completed_originals:
@@ -858,6 +873,25 @@ def load_status(filepath, user_id="HG_pencil"):
                                             "status_change": {}
                                         })
                                         
+                            # 休息クエストかどうかの判定
+                            q_title = q.get("title", "")
+                            q_desc = q.get("description", "")
+                            q_orig = q.get("original_title", "")
+                            search_q = (q_title + " " + q_desc + " " + q_orig).lower()
+                            rest_keywords = ["休息", "休養", "睡眠", "リフレッシュ", "デトックス", "温泉", "マッサージ", "日常メンテナンス"]
+                            is_rest_quest = any(k in search_q for k in rest_keywords)
+                            
+                            if is_rest_quest:
+                                old_hp = hp.get("current", 100)
+                                hp["current"] = min(hp.get("max", 100), hp.get("current", 100) + 50)
+                                hp_recovered = hp["current"] - old_hp
+                                if hp_recovered > 0:
+                                    history.append({
+                                        "date": datetime.now().strftime("%Y-%m-%d"),
+                                        "event": f"HP Recovered: +{hp_recovered} HP (Rest Quest: {q['title']})",
+                                        "status_change": {}
+                                    })
+
                             history.append({
                                 "date": datetime.now().strftime("%Y-%m-%d"),
                                 "event": event_key,
@@ -1229,6 +1263,20 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         if not date:
             continue
 
+        # --- HPデバフ倍率の計算 ---
+        hp_curr = hp.get("current", 100)
+        hp_max = hp.get("max", 100)
+        hp_pct = (hp_curr / hp_max * 100) if hp_max > 0 else 100
+        
+        debuff_multiplier = 1.0
+        debuff_text = ""
+        if hp_pct < 40:
+            debuff_multiplier = 0.5
+            debuff_text = " [HP Debuff -50% applied]"
+        elif hp_pct < 80:
+            debuff_multiplier = 0.8
+            debuff_text = " [HP Debuff -20% applied]"
+
         is_override = False
         old_points = {}
         target_history_idx = -1
@@ -1236,7 +1284,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         if date in reflected_dates:
             # 過去の履歴からこの日付のインポート実績を探す
             for idx, h in enumerate(history):
-                if h.get("event", "").startswith(f"Training Reflected: {date} "):
+                if h.get("event", "").startswith(f"Training Reflected: {date} ") or h.get("event", "").startswith(f"Daily Log Reflected: {date} "):
                     old_points = h.get("status_change", {})
                     target_history_idx = idx
                     is_override = True
@@ -1249,7 +1297,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
                 has_diff = False
                 
                 for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]:
-                    new_val = int(points.get(p, 0))
+                    new_val = int(int(points.get(p, 0)) * debuff_multiplier)
                     old_val = int(old_points.get(p, 0))
                     diff = new_val - old_val
                     if diff != 0:
@@ -1264,18 +1312,18 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
                     continue
                 else:
                     # 差分がある ➔ 上書き更新
-                    history[target_history_idx]["status_change"] = {p: int(points.get(p, 0)) for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"] if int(points.get(p, 0)) > 0}
+                    history[target_history_idx]["status_change"] = {p: int(int(points.get(p, 0)) * debuff_multiplier) for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"] if int(int(points.get(p, 0)) * debuff_multiplier) > 0}
                     history[target_history_idx]["status_change_detail"] = entry.get("detail", {})
                     history[target_history_idx]["summary"] = summary
                     
-                    pts_str = ", ".join([f"{k}+{v}" for k, v in points.items() if int(v) > 0])
-                    history[target_history_idx]["event"] = f"Training Reflected: {date} ({pts_str})"
+                    pts_str = ", ".join([f"{k}+{int(int(v)*debuff_multiplier)}" for k, v in points.items() if int(v) > 0])
+                    history[target_history_idx]["event"] = f"Training Reflected: {date} ({pts_str}){debuff_text}"
                     
                     # HP回復補正計算 (VIT / MND の加算量変化に基づいて補正)
                     old_vit = int(old_points.get("VIT", 0))
                     old_mnd = int(old_points.get("MND", 0))
-                    new_vit = int(points.get("VIT", 0))
-                    new_mnd = int(points.get("MND", 0))
+                    new_vit = int(int(points.get("VIT", 0)) * debuff_multiplier)
+                    new_mnd = int(int(points.get("MND", 0)) * debuff_multiplier)
                     
                     old_hp_to_recover = int((old_vit + old_mnd) * 0.5)
                     new_hp_to_recover = int((new_vit + new_mnd) * 0.5)
@@ -1297,7 +1345,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         added_points = {}
         for p, val in points.items():
             if p in training:
-                val_int = int(val)
+                val_int = int(int(val) * debuff_multiplier)
                 training[p] += val_int
                 daily_points += val_int
                 added_points[p] = val_int
@@ -1306,6 +1354,23 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         vit_add = added_points.get("VIT", 0)
         mnd_add = added_points.get("MND", 0)
         hp_to_recover = int((vit_add + mnd_add) * 0.5)
+        
+        # 体調による追加HP回復
+        cond_val = entry.get("condition") or entry.get("detail", {}).get("condition")
+        if cond_val is not None:
+            try:
+                cond_num = int(cond_val)
+                if cond_num == 5:
+                    hp_to_recover += 50
+                elif cond_num == 4:
+                    hp_to_recover += 30
+                elif cond_num == 3:
+                    hp_to_recover += 15
+                elif cond_num == 2:
+                    hp_to_recover += 5
+            except (ValueError, TypeError):
+                pass
+
         if hp_to_recover > 0:
             old_hp = hp["current"]
             hp["current"] = min(hp["max"], hp["current"] + hp_to_recover)
@@ -1318,13 +1383,13 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         pts_str = ", ".join([f"{k}+{v}" for k, v in added_points.items() if v > 0])
         history.append({
             "date": datetime.now().strftime("%Y-%m-%d"),
-            "event": f"Training Reflected: {date} ({pts_str})",
+            "event": f"Training Reflected: {date} ({pts_str}){debuff_text}",
             "status_change": added_points,
             "status_change_detail": entry.get("detail", {}),
             "summary": summary
         })
 
-        results.append(f"反映成功: {date} ({pts_str}) - {summary}")
+        results.append(f"反映成功: {date} ({pts_str}){debuff_text} - {summary}")
 
     # 各ステータスごとに、100ポイント毎のチケット回復判定を行う
     tickets_earned_msg = []

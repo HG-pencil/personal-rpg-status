@@ -785,15 +785,49 @@ function generateAdvisories(data) {
         });
     }
     
-    // 3. AI開発力（DEV）ビルド提案
-    if (status.DEV && status.DEV.current < 200) {
+    // 3. DEV偏重（オーバースペック・アラート）
+    const otherSum = params.reduce((sum, p) => sum + (status[p]?.current || 0), 0);
+    const otherAvg = otherSum / params.length;
+    const devVal = status.DEV?.current || 0;
+    if (devVal - otherAvg >= 150) {
+        advisories.push({
+            type: "warning",
+            text: `⚔️ **DEV偏重（オーバースペック・アラート）**<br>AI開発力 (DEV: ${devVal}) が他の基礎能力の平均値 (${Math.round(otherAvg)}) より著しく突出しています。肉体(STR/VIT)や精神力(MND)、魅力(CHA)の土台が伴わなければ、高難度クエストで状態異常デバフを受けやすくなります。バランスを取るため、他パラメータのTrainingを意識的に行ってください。`
+        });
+    }
+    
+    // 4. CHA停滞（信頼結界の弱体化）
+    const history = data.history || [];
+    const hasRecentCha = history.slice(-20).some(h => {
+        if (h.status_change && h.status_change.CHA > 0) return true;
+        if (h.event && (h.event.includes("CHA+") || h.event.includes("CHA) Obtained"))) return true;
+        return false;
+    });
+    if (!hasRecentCha) {
+        advisories.push({
+            type: "warning",
+            text: `💬 **CHA停滞（信頼結界の弱体化）**<br>直近20件の活動履歴に魅力・信頼関係 (CHA) の訓練実績が記録されていません。何よりも重要な聖域 of守護者（妻）との日常対話や、他者とのコミュニケーションが不足している恐れがあります。定期的に「対話クエスト」を実行し、信頼結界を強化してください。`
+        });
+    }
+    
+    // 5. AI開発力（DEV）ビルド提案 (偏重警告が出ていない場合のみ表示)
+    if (devVal - otherAvg < 150 && status.DEV && status.DEV.current < 200) {
         advisories.push({
             type: "build",
             text: `💡 **ビルド提案（職業特性強化）**<br>現在のAI開発力 (DEV: ${status.DEV.current}) は見習いランクです。まずは 200 ゲート（日常利用）の昇段試験への挑戦を推奨します。ITパスポート等で培った基礎力にAI操作知識をプラスしましょう。`
         });
     }
     
-    // 4. 測定チケットの案内
+    // 6. 未採点の回答
+    const pending = data.pending_answers || [];
+    if (pending.length > 0) {
+        advisories.push({
+            type: "info",
+            text: `📝 **未採点の回答が存在します (${pending.length}件)**<br>ギルドに提出済みの昇段試験回答が未採点状態です。AI（Antigravity）との対話チャットにて「採点して」と入力し、速やかに採点結果をステータスへ反映させてください。`
+        });
+    }
+    
+    // 7. 測定チケットの案内
     const tickets = data.tickets || {};
     const totalTickets = (tickets.all || 0) + 
                          (tickets.STR || 0) + 
@@ -804,9 +838,12 @@ function generateAdvisories(data) {
                          (tickets.CHA || 0) + 
                          (tickets.DEV || 0);
     if (totalTickets > 0) {
+        const isHeavy = totalTickets >= 5;
         advisories.push({
-            type: "success",
-            text: `🎫 **昇段試験（測定）の案内**<br>現在、測定チケットを合計 ${totalTickets} 枚所持しています。頭が十分に回り、コンディションが良いタイミングで「ゲート試験」タブを開き、次のゲート試験に挑戦してください！`
+            type: isHeavy ? "warning" : "success",
+            text: isHeavy 
+                ? `🎫 **測定チケット過剰蓄積 (${totalTickets}枚)**<br>測定チケットが溜まっています！能力値の成長に対して昇段試験を受けていない状態です。コンディションが良い日に「ゲート試験」タブから試験に挑戦し、ランクアップを果たしてください。`
+                : `🎫 **昇段試験（測定）の案内**<br>現在、測定チケットを合計 ${totalTickets} 枚所持しています。頭が十分に回り、コンディションが良いタイミングで「ゲート試験」タブを開き、次のゲート試験に挑戦してください！`
         });
     }
     
@@ -1120,18 +1157,21 @@ function loadAvailableTests() {
             
             allTests.forEach(test => {
                 if (test.is_training) return;
+                
                 const param = test.param;
                 const targetGate = test.target_gate;
                 const pData = status[param] || { current: 100 };
                 const currVal = pData.current;
                 
+                // ゲート試験（次のゲートに該当するもの）
                 if (getNextGate(currVal) === targetGate) {
-                    test.test_type = 'gate';
-                    gateTests.push(test);
-                } else if (targetGate <= currVal) {
-                    test.test_type = 'measurement';
-                    measurementTests.push(test);
+                    const gateTest = { ...test, test_type: 'gate' };
+                    gateTests.push(gateTest);
                 }
+                
+                // 実力測定試験（チケット不要）には全件を無条件で追加
+                const measurementTest = { ...test, test_type: 'measurement' };
+                measurementTests.push(measurementTest);
             });
             
             let html = '';
@@ -1150,13 +1190,34 @@ function loadAvailableTests() {
                     const targetGate = test.target_gate;
                     const timeMin = test.time_limit_seconds / 60;
                     
+                    const pData = status[param] || { current: 100 };
+                    const currVal = pData.current;
+                    
+                    // レベルキャップ - 20 の資格チェック
+                    const requiredVal = targetGate - 20;
+                    const isQualified = currVal >= requiredVal;
+                    
                     const hasSpecific = tickets[param] && tickets[param] > 0;
                     const hasAll = tickets.all && tickets.all > 0;
                     const hasTicket = hasSpecific || hasAll;
                     
-                    const ticketStatusHtml = hasTicket 
-                        ? `<span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能</span>` 
-                        : `<span class="meta-diff" style="color: var(--accent-red);">チケット不足</span>`;
+                    let ticketStatusHtml = "";
+                    let btnDisabled = false;
+                    let btnStyle = "";
+                    let warningText = "";
+                    
+                    if (!isQualified) {
+                        ticketStatusHtml = `<span class="meta-diff" style="color: var(--accent-red);">受験資格なし (必要値: ${requiredVal})</span>`;
+                        btnDisabled = true;
+                        btnStyle = 'background: #3a3b3c; border-color: transparent; cursor: not-allowed; opacity: 0.5;';
+                        warningText = `<div style="font-size: 0.65rem; color: var(--accent-red); margin-top: 4px; font-family: 'Noto Sans JP', sans-serif;">※この試験を受けるには、現在のステータスが ${requiredVal} 以上である必要があります (現在: ${currVal})。</div>`;
+                    } else if (!hasTicket) {
+                        ticketStatusHtml = `<span class="meta-diff" style="color: var(--accent-red);">チケット不足</span>`;
+                        btnDisabled = true;
+                        btnStyle = 'background: #3a3b3c; border-color: transparent; cursor: not-allowed;';
+                    } else {
+                        ticketStatusHtml = `<span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能</span>`;
+                    }
                     
                     const escapedId = escapeHtml(test.id);
                     const escapedParam = escapeHtml(param);
@@ -1165,7 +1226,7 @@ function loadAvailableTests() {
                     const escapedTime = escapeHtml(String(timeMin));
                     
                     html += `
-                        <div class="test-select-card" style="${!hasTicket ? 'opacity: 0.6; border-color: rgba(255,255,255,0.02);' : ''}">
+                        <div class="test-select-card" style="${btnDisabled ? 'opacity: 0.6; border-color: rgba(255,255,255,0.02);' : ''}">
                             <div class="test-card-left">
                                 <div class="test-card-title">${escapedParam} -> ${escapedGate} ゲート試験</div>
                                 <div class="test-card-meta">
@@ -1173,8 +1234,9 @@ function loadAvailableTests() {
                                     <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
                                     <span>状態: ${ticketStatusHtml}</span>
                                 </div>
+                                ${warningText}
                             </div>
-                            <button class="btn btn-primary" ${!hasTicket ? 'disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed;"' : ''} onclick="startTest('${escapedId}')">試験開始</button>
+                            <button class="btn btn-primary" ${btnDisabled ? 'disabled style="' + btnStyle + '"' : ''} onclick="startTest('${escapedId}')">試験開始</button>
                         </div>
                     `;
                 });
@@ -1243,10 +1305,25 @@ function startTest(testId) {
             const targetGate = test.target_gate;
             const pData = status[param] || { current: 100 };
             const currVal = pData.current;
-            const isMeasurement = !test.is_training && targetGate <= currVal;
             
-            // チケットの有無チェック (追試ミッションおよび実力測定試験でない場合)
+            // 本来実力測定として受けているのか、ゲートとして受けているのかを判断するための仮振り分け
+            // ここでは startTest は button 属性の onclick から呼ばれるため、
+            // loadAvailableTests で test_type が付与されていましたが、fetchし直すと test_type が無いため、
+            // 呼び出し元のコンテキストが gate なのか measurement なのかを、ボタン要素やID、ステータス値から判定
+            // is_training でなく、かつ targetGate <= currVal である場合を measurement とする（旧仕様との互換）
+            // または、レベルキャップ-20未満である場合は、gateとしては startTest ボタンが無効化されているため、
+            // ユーザーが startTest を実行できたということは、それは measurement であるはずです。
+            // しかし、意図的に判定を厳密にするため、もし getNextGate(currVal) === targetGate かつ現在の値が targetGate - 20 以上なら gate、そうでなければ measurement として扱います。
+            const isMeasurement = !test.is_training && (targetGate <= currVal || currVal < (targetGate - 20));
+            
+            // 受験資格チェック (追試ミッションおよび実力測定試験でない場合のみ)
             if (!isTrainingTask && !isMeasurement) {
+                const requiredVal = targetGate - 20;
+                if (currVal < requiredVal) {
+                    alert(`この試験を受けるには、ステータスが ${requiredVal} 以上である必要があります (現在: ${currVal})。`);
+                    return;
+                }
+                
                 const tickets = cachedStatusData.tickets || {};
                 const hasSpecific = tickets[param] && tickets[param] > 0;
                 const hasAll = tickets.all && tickets.all > 0;
@@ -2622,10 +2699,10 @@ function evaluateDailyLog(text, conditionVal, moodVal) {
     // 7. 体調(condition)による HP 回復量
     const condNum = parseInt(conditionVal);
     let hpRecover = 0;
-    if (condNum === 5) hpRecover = 30;
-    else if (condNum === 4) hpRecover = 20;
-    else if (condNum === 3) hpRecover = 10;
-    else if (condNum === 2) hpRecover = 3;
+    if (condNum === 5) hpRecover = 50;
+    else if (condNum === 4) hpRecover = 30;
+    else if (condNum === 3) hpRecover = 15;
+    else if (condNum === 2) hpRecover = 5;
     else if (condNum === 1) hpRecover = 0;
     
     return {
@@ -2646,6 +2723,19 @@ function triggerDailyLogEvaluation() {
         return;
     }
     
+    // HPデバフ倍率の計算
+    const hp = cachedStatusData.status.HP || { current: 100, max: 100 };
+    const hpPct = hp.max > 0 ? (hp.current / hp.max) * 100 : 0;
+    let multiplier = 1.0;
+    let debuffText = "";
+    if (hpPct < 40) {
+        multiplier = 0.5;
+        debuffText = "【HP低下デバフ -50% 適用】";
+    } else if (hpPct < 80) {
+        multiplier = 0.8;
+        debuffText = "【HP低下デバフ -20% 適用】";
+    }
+    
     // 簡易査定の実行
     const result = evaluateDailyLog(workText, condition, mood);
     lastEvaluatedLog = result;
@@ -2654,11 +2744,23 @@ function triggerDailyLogEvaluation() {
     const reasonsContainer = document.getElementById('preview-reasons-container');
     reasonsContainer.innerHTML = '';
     
+    // デバフ適用中なら警告表示を挿入
+    if (multiplier < 1.0) {
+        const warningColor = hpPct < 40 ? "var(--accent-red)" : "var(--timer-yellow)";
+        reasonsContainer.insertAdjacentHTML('beforeend', `
+            <div style="font-size: 0.75rem; color: ${warningColor}; font-weight: bold; text-align: center; border: 1px solid ${warningColor}; background: rgba(255, 71, 87, 0.05); padding: 6px; border-radius: 4px; margin-bottom: 8px;">
+                ⚠️ ${debuffText}<br>HPが低いため、獲得努力値が減衰しています。
+            </div>
+        `);
+    }
+    
     let hasAnyPoints = false;
     const params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
     
     params.forEach(p => {
-        const val = result.changes[p];
+        // デバフを適用した最終値を計算（端数切り捨て）
+        const val = Math.floor(result.changes[p] * multiplier);
+        
         // インプット入力欄の値を初期設定
         const adjustInput = document.getElementById(`adjust-${p}`);
         if (adjustInput) adjustInput.value = val;
@@ -2667,7 +2769,9 @@ function triggerDailyLogEvaluation() {
             hasAnyPoints = true;
             const sub = [];
             Object.keys(result.details[p]).forEach(k => {
-                sub.push(`${k}+${result.details[p][k]}`);
+                const originalVal = result.details[p][k];
+                const debuffedVal = Math.floor(originalVal * multiplier);
+                sub.push(`${k}+${debuffedVal}`);
             });
             const subStr = sub.length > 0 ? ` (${sub.join(', ')})` : '';
             reasonsContainer.insertAdjacentHTML('beforeend', `
@@ -2725,15 +2829,33 @@ function submitDailyLogImport() {
     const finalChanges = {};
     const finalDetails = {};
     
+    // HPデバフ倍率の計算 (履歴表記用および内訳の計算用)
+    const hp = cachedStatusData.status.HP || { current: 100, max: 100 };
+    const hpPct = hp.max > 0 ? (hp.current / hp.max) * 100 : 0;
+    let debuffText = "";
+    let multiplier = 1.0;
+    if (hpPct < 40) {
+        debuffText = " [HP Debuff -50% applied]";
+        multiplier = 0.5;
+    } else if (hpPct < 80) {
+        debuffText = " [HP Debuff -20% applied]";
+        multiplier = 0.8;
+    }
+    
     let dailyPointsTotal = 0;
     params.forEach(p => {
         const val = parseInt(document.getElementById(`adjust-${p}`).value) || 0;
         finalChanges[p] = val;
         dailyPointsTotal += val;
         
-        // 内訳の再構築
-        if (lastEvaluatedLog && val === lastEvaluatedLog.changes[p]) {
-            finalDetails[p] = lastEvaluatedLog.details[p];
+        // 内訳の再構築 (デバフ後値と比較)
+        const expectedVal = Math.floor((lastEvaluatedLog ? lastEvaluatedLog.changes[p] : 0) * multiplier);
+        if (lastEvaluatedLog && val === expectedVal) {
+            // 内訳の各理由の値もデバフをかけたものに書き換える
+            finalDetails[p] = {};
+            Object.keys(lastEvaluatedLog.details[p]).forEach(reason => {
+                finalDetails[p][reason] = Math.floor(lastEvaluatedLog.details[p][reason] * multiplier);
+            });
         } else if (val > 0) {
             finalDetails[p] = { "手動調整": val };
         } else {
@@ -2752,10 +2874,10 @@ function submitDailyLogImport() {
     });
     
     // 2. HP回復
-    const hp = updatedData.status.HP || { current: 100, max: 100 };
-    const oldHp = hp.current;
-    hp.current = Math.min(hp.max, hp.current + hpRecover);
-    const actualRecovered = hp.current - oldHp;
+    const updatedHp = updatedData.status.HP || { current: 100, max: 100 };
+    const oldHp = updatedHp.current;
+    updatedHp.current = Math.min(updatedHp.max, updatedHp.current + hpRecover);
+    const actualRecovered = updatedHp.current - oldHp;
     
     // 3. 履歴追加
     const today = getTodayString();
@@ -2772,7 +2894,7 @@ function submitDailyLogImport() {
     });
     const ptsStr = pts.length > 0 ? pts.join(', ') : 'なし';
     
-    const eventText = `Daily Log Reflected: ${today} (${ptsStr})`;
+    const eventText = `Daily Log Reflected: ${today} (${ptsStr})${debuffText}`;
     
     if (!updatedData.history) updatedData.history = [];
     updatedData.history.push({
