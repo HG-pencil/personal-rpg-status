@@ -99,12 +99,20 @@
                     <button class="tab-btn" onclick="switchTab('chart-tab')">レーダーチャート</button>
                     <button class="tab-btn" onclick="switchTab('advisory-tab')">GMアドバイス</button>
                     <button class="tab-btn" onclick="switchTab('test-tab')">ゲート試験</button>
+                    <button class="tab-btn" onclick="switchTab('daily-log-tab')">デイリーログ</button>
                 </div>
 
                 <!-- 能力ステータスタブ -->
                 <div id="status-tab" class="tab-content active">
                     <div class="params-list" id="params-container">
                         <!-- JSで動的に追加 -->
+                    </div>
+                    <!-- 最近の活動履歴セクション -->
+                    <div class="history-section" style="margin-top: 25px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 20px;">
+                        <h3 class="section-subtitle" style="font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: bold; color: var(--accent-blue); margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase;">📜 RECENT ACTIVITIES (最近の活動履歴)</h3>
+                        <div id="history-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                            <!-- JSで動的に追加 -->
+                        </div>
                     </div>
                 </div>
 
@@ -209,6 +217,57 @@
                                 <p class="complete-desc-sub">（自動コピーされない場合は、チャット欄に「採点して」と入力して送信してください）</p>
                                 <button class="btn btn-primary" onclick="resetTestTab()" style="margin-top: 10px;">ステータスに戻る</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- デイリーログタブ -->
+                <div id="daily-log-tab" class="tab-content">
+                    <div class="daily-log-container" style="display: flex; flex-direction: column; gap: 15px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 20px; font-family: 'Noto Sans JP', sans-serif;">
+                        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 10px; margin-bottom: 5px;">
+                            <h3 style="font-family: 'Outfit', sans-serif; font-size: 1rem; color: var(--accent-blue); margin: 0; font-weight: bold; letter-spacing: 0.5px;">✍️ DAILY LOG (簡易日記入力)</h3>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin: 4px 0 0 0; line-height: 1.4;">今日やったことを入力するだけで、能力努力値（内訳）の自動査定と一撃同期が行われます。</p>
+                        </div>
+                        
+                        <div class="log-form-item">
+                            <label style="display: block; font-size: 0.8rem; font-weight: bold; color: #fff; margin-bottom: 6px;">今日やったこと <span style="color: var(--accent-blue); font-size: 0.7rem;">(主要努力値の自動査定材料)</span></label>
+                            <textarea id="daily-log-work" class="test-textarea" style="height: 100px; padding: 10px; font-size: 0.85rem;" placeholder="例: システム開発のデバッグを行い、バグ2件を修正した。また、夕方に30分歩いて日常メンテナンスを継続。"></textarea>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="log-form-item">
+                                <label style="display: block; font-size: 0.8rem; font-weight: bold; color: #fff; margin-bottom: 6px;">今日の体調</label>
+                                <div class="select-wrapper">
+                                    <select id="daily-log-condition" class="user-select-dropdown" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; padding: 8px 12px; font-size: 0.85rem; font-family: 'Noto Sans JP', sans-serif;">
+                                        <option value="5">😆 絶好調 (HP回復量特大)</option>
+                                        <option value="4">😊 好調 (HP回復量大)</option>
+                                        <option value="3" selected>😐 普通 (HP回復量中)</option>
+                                        <option value="2">🙁 やや不調 (回復小・疲労)</option>
+                                        <option value="1">🤢 絶不調 (回復なし・高疲労)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="log-form-item">
+                                <label style="display: block; font-size: 0.8rem; font-weight: bold; color: #fff; margin-bottom: 6px;">今日の気分</label>
+                                <div class="select-wrapper">
+                                    <select id="daily-log-mood" class="user-select-dropdown" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; padding: 8px 12px; font-size: 0.85rem; font-family: 'Noto Sans JP', sans-serif;">
+                                        <option value="5">🔥 最高 (MND努力値ボーナス+2)</option>
+                                        <option value="4">✨ 前向き (MND努力値ボーナス+1)</option>
+                                        <option value="3" selected>💬 普通 (ボーナスなし)</option>
+                                        <option value="2">💤 やや憂鬱 (精神的疲労)</option>
+                                        <option value="1">💀 最悪 (深刻な精神デバフ)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="log-form-item">
+                            <label style="display: block; font-size: 0.8rem; font-weight: bold; color: #fff; margin-bottom: 6px;">明日の一手 <span style="color: var(--accent-blue); font-size: 0.7rem;">(明日やる最優先目標)</span></label>
+                            <input type="text" id="daily-log-next" class="test-textarea" style="height: 38px; padding: 8px 10px; font-size: 0.85rem;" placeholder="例: 昇段試験（測定）に挑戦してDEVを限界突破させる">
+                        </div>
+                        
+                        <div style="display: flex; justify-content: flex-end; margin-top: 5px;">
+                            <button class="btn btn-primary" onclick="triggerDailyLogEvaluation()" style="padding: 10px 20px; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: bold; letter-spacing: 1px; border-radius: 6px;">LOG EVALUATION (査定を実行)</button>
                         </div>
                     </div>
                 </div>
@@ -324,8 +383,76 @@
         </div>
     </div>
 
+    <!-- デイリーログ査定プレビューモーダル -->
+    <div id="daily-log-preview-modal" class="modal-overlay" style="display: none; justify-content: center; align-items: center; backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.75); z-index: 9999;">
+        <div class="modal-content glass" style="max-width: 500px; padding: 25px; border-radius: 12px; border: 1px solid rgba(0, 210, 255, 0.2); background: rgba(10, 15, 25, 0.85);">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 class="modal-title" style="font-family: 'Outfit', sans-serif; font-size: 0.95rem; color: var(--accent-blue); font-weight: bold; margin: 0; display: flex; align-items: center; gap: 8px;">⚖️ LOG EVALUATION PREVIEW (自動査定プレビュー)</h3>
+                <button class="modal-close-btn" onclick="closeDailyLogPreviewModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; font-family: 'Noto Sans JP', sans-serif;">
+                <p style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
+                    日記テキストから抽出された獲得努力値（および回復量）のプレビューです。必要に応じて値を手動で微調整したのち、「確定してインポート」を押してください。
+                </p>
+                
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px 15px; margin-bottom: 15px;">
+                    <div style="font-size: 0.7rem; font-weight: bold; color: var(--accent-blue); margin-bottom: 5px; font-family: 'Outfit', sans-serif; letter-spacing: 0.5px;">ESTIMATED STATUS CHANGES (獲得ポイントと根拠)</div>
+                    <div id="preview-reasons-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+                        <!-- JSで動的に追加 -->
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <div style="font-size: 0.7rem; font-weight: bold; color: var(--text-secondary); margin-bottom: 10px; font-family: 'Outfit', sans-serif; letter-spacing: 0.5px;">MANUAL ADJUSTMENT (手動調整)</div>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-family: 'Outfit', sans-serif;">
+                        <!-- STR, VIT, INT, WIS -->
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">STR</span>
+                            <input type="number" id="adjust-STR" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">VIT</span>
+                            <input type="number" id="adjust-VIT" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">INT</span>
+                            <input type="number" id="adjust-INT" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">WIS</span>
+                            <input type="number" id="adjust-WIS" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-family: 'Outfit', sans-serif; margin-top: 8px;">
+                        <!-- MND, CHA, DEV, HP 回復 -->
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">MND</span>
+                            <input type="number" id="adjust-MND" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">CHA</span>
+                            <input type="number" id="adjust-CHA" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: #fff;">DEV</span>
+                            <input type="number" id="adjust-DEV" min="0" max="50" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center; background: rgba(46, 213, 115, 0.08); padding: 6px; border-radius: 6px; border: 1px solid rgba(46, 213, 115, 0.25);">
+                            <span style="font-size: 0.65rem; font-weight: bold; color: var(--hp-green);">HP回復</span>
+                            <input type="number" id="adjust-HP-recover" min="0" max="100" style="width: 50px; text-align: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(46, 213, 115, 0.4); border-radius: 4px; color: var(--hp-green); padding: 2px; font-size: 0.8rem;" value="0">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px;">
+                <button class="btn btn-danger" onclick="closeDailyLogPreviewModal()">キャンセル</button>
+                <button class="btn btn-primary" onclick="submitDailyLogImport()" id="preview-import-btn" style="padding: 8px 16px; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: bold;">確定してインポート (一撃同期)</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 認証（ログイン・新規登録）モーダル -->
-    <div id="auth-modal" class="modal-overlay" style="display: none; justify-content: center; align-items: center; backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.75); z-index: 9999;">
+    <div id="auth-modal" class="modal-overlay" style="display: flex; justify-content: center; align-items: center; backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.75); z-index: 9999;">
         <div class="modal-content glass" style="max-width: 400px; padding: 30px; box-shadow: 0 0 35px rgba(0, 210, 255, 0.25); border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 12px; background: rgba(10, 15, 25, 0.75);">
             <!-- 1. ログインビュー -->
             <div id="auth-login-view">

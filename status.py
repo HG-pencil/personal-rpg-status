@@ -142,6 +142,23 @@ def translate_to_quest(raw_title, raw_desc):
         
     reward = f"{param} +{points}"
 
+    # 期限 (due) の推測 (今日 / 今週 / 今月)
+    due = "this_month"
+    search_all = (title + " " + desc + " " + raw_title + " " + raw_desc).lower()
+    if any(x in search_all for x in ["今日", "本日", "今日中", "today"]):
+        due = "today"
+    elif any(x in search_all for x in ["今週", "毎週", "週次", "this week", "week", "曜日"]):
+        due = "this_week"
+
+    # 重み (weight) の推測 (軽 / 中 / 重)
+    weight = "light"
+    if rank in ["S", "A"]:
+        weight = "heavy"
+    elif rank == "B":
+        weight = "medium"
+    elif rank == "C":
+        weight = "light"
+
     return {
         "step": f"Rank {rank}",
         "title": title,
@@ -149,7 +166,9 @@ def translate_to_quest(raw_title, raw_desc):
         "client": client,
         "reward": reward,
         "original_title": raw_title,
-        "status": "pending"
+        "status": "pending",
+        "due": due,
+        "weight": weight
     }
 
 def generate_roadmap_events(roadmap, status_data):
@@ -1246,6 +1265,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
                 else:
                     # 差分がある ➔ 上書き更新
                     history[target_history_idx]["status_change"] = {p: int(points.get(p, 0)) for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"] if int(points.get(p, 0)) > 0}
+                    history[target_history_idx]["status_change_detail"] = entry.get("detail", {})
                     history[target_history_idx]["summary"] = summary
                     
                     pts_str = ", ".join([f"{k}+{v}" for k, v in points.items() if int(v) > 0])
@@ -1300,6 +1320,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
             "date": datetime.now().strftime("%Y-%m-%d"),
             "event": f"Training Reflected: {date} ({pts_str})",
             "status_change": added_points,
+            "status_change_detail": entry.get("detail", {}),
             "summary": summary
         })
 

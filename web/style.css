@@ -1585,4 +1585,57 @@ body {
     }
 }
 
+/* ==================================================== */
+/* 🎫 クエストバッジ (期限 & 重み)                      */
+/* ==================================================== */
+.quest-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Noto Sans JP', sans-serif;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+}
+
+/* 期限バッジ */
+.badge-due-today {
+    background: rgba(255, 71, 87, 0.15);
+    border: 1px solid rgba(255, 71, 87, 0.4);
+    color: #ff4757;
+    box-shadow: 0 0 6px rgba(255, 71, 87, 0.15);
+}
+
+.badge-due-week {
+    background: rgba(30, 144, 255, 0.15);
+    border: 1px solid rgba(30, 144, 255, 0.4);
+    color: #1e90ff;
+}
+
+.badge-due-month {
+    background: rgba(164, 176, 190, 0.1);
+    border: 1px solid rgba(164, 176, 190, 0.3);
+    color: #a4b0be;
+}
+
+/* 重みバッジ */
+.badge-weight-heavy {
+    background: rgba(255, 127, 80, 0.15);
+    border: 1px solid rgba(255, 127, 80, 0.4);
+    color: #ff7f50;
+}
+
+.badge-weight-medium {
+    background: rgba(255, 211, 42, 0.12);
+    border: 1px solid rgba(255, 211, 42, 0.35);
+    color: #ffd32a;
+}
+
+.badge-weight-light {
+    background: rgba(46, 213, 115, 0.15);
+    border: 1px solid rgba(46, 213, 115, 0.4);
+    color: #2ed573;
+}
+
 

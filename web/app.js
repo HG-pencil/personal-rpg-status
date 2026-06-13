@@ -12,7 +12,26 @@ const firebaseConfig = {
 // Initialize Firebase Compat
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-let currentUserId = localStorage.getItem('rpg_user_id') || 'HG_pencil';
+
+// localStorage 例外安全用ヘルパー関数 (iOSプライベートモード等のクラッシュ防止)
+function safeGetItem(key, defaultValue = '') {
+    try {
+        return localStorage.getItem(key) || defaultValue;
+    } catch (e) {
+        console.warn("localStorage.getItem failed:", e);
+        return defaultValue;
+    }
+}
+
+function safeSetItem(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e) {
+        console.warn("localStorage.setItem failed:", e);
+    }
+}
+
+let currentUserId = safeGetItem('rpg_user_id', 'HG_pencil');
 let userDocRef = db.collection('users').doc(currentUserId);
 let userList = ['HG_pencil'];
 
@@ -660,6 +679,9 @@ function updateUI(data) {
     
     // クエストの描画
     renderQuests(data);
+    
+    // 活動履歴の描画
+    renderHistory(data);
 }
 
 
@@ -1740,7 +1762,8 @@ function switchTab(tabId) {
         (tabId === 'items-tab' && btn.innerText.includes('アイテム')) ||
         (tabId === 'chart-tab' && btn.innerText.includes('レーダーチャート')) ||
         (tabId === 'advisory-tab' && btn.innerText.includes('GMアドバイス')) ||
-        (tabId === 'test-tab' && btn.innerText.includes('ゲート試験'))
+        (tabId === 'test-tab' && btn.innerText.includes('ゲート試験')) ||
+        (tabId === 'daily-log-tab' && btn.innerText.includes('デイリーログ'))
     );
     if (activeBtn) activeBtn.classList.add('active');
 
@@ -1980,7 +2003,7 @@ async function loadUserList() {
     }
     
     // localStorage からもマージ
-    const localUsers = JSON.parse(localStorage.getItem('rpg_user_list') || '[]');
+    const localUsers = JSON.parse(safeGetItem('rpg_user_list', '[]'));
     localUsers.forEach(u => {
         if (!userList.includes(u)) {
             userList.push(u);
@@ -2010,7 +2033,7 @@ function switchUser(userId) {
     if (!userId || userId === currentUserId) return;
     
     currentUserId = userId;
-    localStorage.setItem('rpg_user_id', currentUserId);
+    safeSetItem('rpg_user_id', currentUserId);
     userDocRef = db.collection('users').doc(currentUserId);
     
     // UIをロード
@@ -2121,10 +2144,10 @@ function createNewUser() {
         userList.push(newUserId);
         
         // localStorageに保存
-        const localUsers = JSON.parse(localStorage.getItem('rpg_user_list') || '[]');
+        const localUsers = JSON.parse(safeGetItem('rpg_user_list', '[]'));
         if (!localUsers.includes(newUserId)) {
             localUsers.push(newUserId);
-            localStorage.setItem('rpg_user_list', JSON.stringify(localUsers));
+            safeSetItem('rpg_user_list', JSON.stringify(localUsers));
         }
         
         // ドロップダウン再構築
@@ -2132,7 +2155,7 @@ function createNewUser() {
         
         // ユーザー切り替え
         currentUserId = newUserId;
-        localStorage.setItem('rpg_user_id', currentUserId);
+        safeSetItem('rpg_user_id', currentUserId);
         userDocRef = db.collection('users').doc(currentUserId);
         
         // UIのロード
@@ -2173,7 +2196,37 @@ function renderQuests(data) {
     
     let completedCount = 0;
     
-    quests.forEach(q => {
+    // クエストを期限（due: today->week->month）と重み（weight: heavy->medium->light）でソート
+    // 完了クエストはすべて下部に集める
+    const sortedQuests = [...quests].sort((a, b) => {
+        const aCompleted = a.status === 'completed' ? 1 : 0;
+        const bCompleted = b.status === 'completed' ? 1 : 0;
+        
+        if (aCompleted !== bCompleted) {
+            return aCompleted - bCompleted; // 未完了が先
+        }
+        
+        // 未完了同士のソート
+        if (aCompleted === 0) {
+            const dueOrder = { "today": 0, "this_week": 1, "this_month": 2 };
+            const weightOrder = { "heavy": 0, "medium": 1, "light": 2 };
+            
+            const aDue = dueOrder[a.due] !== undefined ? dueOrder[a.due] : 2;
+            const bDue = dueOrder[b.due] !== undefined ? dueOrder[b.due] : 2;
+            
+            if (aDue !== bDue) {
+                return aDue - bDue; // 今日 ➔ 今週 ➔ 今月
+            }
+            
+            const aWeight = weightOrder[a.weight] !== undefined ? weightOrder[a.weight] : 2;
+            const bWeight = weightOrder[b.weight] !== undefined ? weightOrder[b.weight] : 2;
+            
+            return aWeight - bWeight; // 重い ➔ 中 ➔ 軽い
+        }
+        return 0;
+    });
+    
+    sortedQuests.forEach(q => {
         const isCompleted = q.status === 'completed';
         if (isCompleted) {
             completedCount++;
@@ -2185,11 +2238,24 @@ function renderQuests(data) {
         const escapedDesc = q.description ? escapeHtml(q.description) : "";
         const escapedStep = escapeHtml(q.step || "");
         
+        // 期限と重みのバッジHTML
+        const dueVal = q.due || "this_month";
+        const weightVal = q.weight || "light";
+        const dueNames = { "today": "今日", "this_week": "今週", "this_month": "今月" };
+        const weightNames = { "heavy": "重い", "medium": "中", "light": "軽い" };
+        
+        const dueBadge = `<span class="quest-badge badge-due-${dueVal}">${dueNames[dueVal]}</span>`;
+        const weightBadge = `<span class="quest-badge badge-weight-${weightVal}">${weightNames[weightVal]}</span>`;
+        
         const questHtml = `
             <div class="quest-card ${isCompleted ? 'completed' : ''}">
                 <div class="quest-card-header">
                     <span class="quest-card-client">FROM: ${clientText}</span>
-                    <span class="quest-card-rank">${escapedStep}</span>
+                    <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                        ${dueBadge}
+                        ${weightBadge}
+                        <span class="quest-card-rank">${escapedStep}</span>
+                    </div>
                 </div>
                 <div class="quest-card-title">${escapedTitle}</div>
                 ${escapedDesc ? `<div class="quest-card-desc">${escapedDesc}</div>` : ''}
@@ -2220,6 +2286,61 @@ function renderQuests(data) {
             progressBar.style.boxShadow = "0 0 10px #00d2ff";
         }
     }
+}
+
+function renderHistory(data) {
+    const container = document.getElementById('history-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const history = data.history || [];
+    if (history.length === 0) {
+        container.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; padding: 10px;">活動履歴がありません。</div>';
+        return;
+    }
+    
+    // 直近20件を逆順（最新が上）で表示
+    const recentHistory = [...history].reverse().slice(0, 20);
+    
+    recentHistory.forEach(h => {
+        const dateStr = escapeHtml(h.date || "");
+        let eventStr = escapeHtml(h.event || "");
+        const summaryStr = h.summary ? escapeHtml(h.summary) : "";
+        
+        // 内訳（根拠）のパースと整形表示
+        let detailHtml = '';
+        if (h.status_change_detail && Object.keys(h.status_change_detail).length > 0) {
+            const details = [];
+            Object.keys(h.status_change_detail).forEach(param => {
+                const subDetails = [];
+                const subObj = h.status_change_detail[param];
+                if (typeof subObj === 'object') {
+                    Object.keys(subObj).forEach(reason => {
+                        const val = subObj[reason];
+                        subDetails.push(`${reason}+${val}`);
+                    });
+                }
+                if (subDetails.length > 0) {
+                    details.push(`${param} (${subDetails.join(', ')})`);
+                }
+            });
+            if (details.length > 0) {
+                detailHtml = `<div class="history-detail-badge" style="font-size: 0.65rem; color: var(--accent-blue); background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.2); border-radius: 4px; padding: 2px 6px; display: inline-block; margin-top: 4px; font-family: 'Outfit', 'Noto Sans JP', sans-serif;">根拠: ${escapeHtml(details.join(' | '))}</div>`;
+            }
+        }
+        
+        const historyItemHtml = `
+            <div class="history-item" style="background: rgba(255, 255, 255, 0.015); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px 12px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <span style="font-family: 'Outfit', sans-serif; font-weight: bold; color: var(--text-secondary); white-space: nowrap;">${dateStr}</span>
+                    <span style="font-family: 'Outfit', sans-serif; color: #fff; font-weight: 600; text-align: right; word-break: break-all;">${eventStr}</span>
+                </div>
+                ${summaryStr ? `<div style="color: var(--text-secondary); line-height: 1.4; margin-top: 2px; font-family: 'Noto Sans JP', sans-serif; word-break: break-all;">${summaryStr}</div>` : ''}
+                ${detailHtml}
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', historyItemHtml);
+    });
 }
 
 // ----------------------------------------------------
@@ -2424,6 +2545,318 @@ function changeArchetype(archetypeId) {
     .catch(err => {
         console.error("転職エラー:", err);
         alert("転職に失敗しました。クラウドデータベースの接続状態を確認してください。");
+    });
+}
+
+// ----------------------------------------------------
+// ✍️ デイリーログ自動査定・一撃インポートシステム
+// ----------------------------------------------------
+let lastEvaluatedLog = null;
+
+function evaluateDailyLog(text, conditionVal, moodVal) {
+    const changes = {
+        STR: 0, VIT: 0, INT: 0, WIS: 0, MND: 0, CHA: 0, DEV: 0
+    };
+    const details = {
+        STR: {}, VIT: {}, INT: {}, WIS: {}, MND: {}, CHA: {}, DEV: {}
+    };
+    
+    const t = text.toLowerCase();
+    
+    // 1. DEV (開発)
+    const devKeywords = ["開発", "実装", "プログラミング", "コード", "デバッグ", "テスト", "自動化", "プログラム", "設計", "wasm", "pyodide", "スクリプト", "git", "github", "インポート", "マージ", "バグ", "修正"];
+    let hasDev = devKeywords.some(k => t.includes(k));
+    if (hasDev) {
+        changes.DEV = 5;
+        details.DEV["実装・検証"] = 4;
+        details.DEV["継続ボーナス"] = 1;
+    }
+    
+    // 2. STR & VIT (身体)
+    const physicalKeywords = ["筋トレ", "歩く", "徒歩", "ウォーキング", "散歩", "走る", "ランニング", "運動", "ストレッチ", "腕立て", "腹筋", "スクワット", "cpap", "シーパップ", "睡眠"];
+    let hasPhys = physicalKeywords.some(k => t.includes(k));
+    if (hasPhys) {
+        changes.STR = 2;
+        details.STR["運動鍛錬"] = 2;
+        changes.VIT = 3;
+        details.VIT["日常メンテナンス"] = 3;
+    }
+    
+    // 3. INT & WIS (知能・知識)
+    const intelKeywords = ["本", "読書", "読む", "勉強", "学習", "調べる", "思考", "分析", "ロードマップ", "本棚", "技術書", "就業規則", "規定", "リスク"];
+    let hasIntel = intelKeywords.some(k => t.includes(k));
+    if (hasIntel) {
+        changes.INT = 2;
+        details.INT["論理思考"] = 2;
+        changes.WIS = 3;
+        details.WIS["知識蓄積"] = 3;
+    }
+    
+    // 4. MND (自己規律・損切りなど)
+    const mndKeywords = ["瞑想", "損切り", "精神", "感情", "規律", "撤退基準", "冷静", "マインド", "分散基準", "セーフティ", "ルール"];
+    let hasMnd = mndKeywords.some(k => t.includes(k));
+    if (hasMnd) {
+        changes.MND = 3;
+        details.MND["自己統制規律"] = 3;
+    }
+    
+    // 5. CHA (コミュニケーション・信頼)
+    const chaKeywords = ["妻", "話した", "対話", "コミュニケーション", "家族", "相談", "感謝", "夫婦", "会話", "面談", "ミーティング"];
+    let hasCha = chaKeywords.some(k => t.includes(k));
+    if (hasCha) {
+        changes.CHA = 4;
+        details.CHA["信頼関係形成"] = 3;
+        details.CHA["家庭円満結界"] = 1;
+    }
+    
+    // 6. 気分(mood)による MND ボーナス
+    const moodNum = parseInt(moodVal);
+    if (moodNum === 5) {
+        changes.MND += 2;
+        details.MND["最高気分ボーナス"] = 2;
+    } else if (moodNum === 4) {
+        changes.MND += 1;
+        details.MND["前向き気分ボーナス"] = 1;
+    }
+    
+    // 7. 体調(condition)による HP 回復量
+    const condNum = parseInt(conditionVal);
+    let hpRecover = 0;
+    if (condNum === 5) hpRecover = 30;
+    else if (condNum === 4) hpRecover = 20;
+    else if (condNum === 3) hpRecover = 10;
+    else if (condNum === 2) hpRecover = 3;
+    else if (condNum === 1) hpRecover = 0;
+    
+    return {
+        changes,
+        details,
+        hpRecover
+    };
+}
+
+function triggerDailyLogEvaluation() {
+    const workText = document.getElementById('daily-log-work').value.trim();
+    const condition = document.getElementById('daily-log-condition').value;
+    const mood = document.getElementById('daily-log-mood').value;
+    const nextAction = document.getElementById('daily-log-next').value.trim();
+    
+    if (!workText) {
+        alert("「今日やったこと」を入力してください。");
+        return;
+    }
+    
+    // 簡易査定の実行
+    const result = evaluateDailyLog(workText, condition, mood);
+    lastEvaluatedLog = result;
+    
+    // UI の構築 (獲得ポイントと根拠)
+    const reasonsContainer = document.getElementById('preview-reasons-container');
+    reasonsContainer.innerHTML = '';
+    
+    let hasAnyPoints = false;
+    const params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
+    
+    params.forEach(p => {
+        const val = result.changes[p];
+        // インプット入力欄の値を初期設定
+        const adjustInput = document.getElementById(`adjust-${p}`);
+        if (adjustInput) adjustInput.value = val;
+        
+        if (val > 0) {
+            hasAnyPoints = true;
+            const sub = [];
+            Object.keys(result.details[p]).forEach(k => {
+                sub.push(`${k}+${result.details[p][k]}`);
+            });
+            const subStr = sub.length > 0 ? ` (${sub.join(', ')})` : '';
+            reasonsContainer.insertAdjacentHTML('beforeend', `
+                <div style="font-size: 0.75rem; color: #fff; display: flex; justify-content: space-between;">
+                    <span>● ${p} 努力値</span>
+                    <span style="font-weight: bold; color: var(--accent-blue);">+${val}${subStr}</span>
+                </div>
+            `);
+        }
+    });
+    
+    // HP回復量の表示
+    const hpAdjustInput = document.getElementById('adjust-HP-recover');
+    if (hpAdjustInput) hpAdjustInput.value = result.hpRecover;
+    
+    if (result.hpRecover > 0) {
+        reasonsContainer.insertAdjacentHTML('beforeend', `
+            <div style="font-size: 0.75rem; color: #fff; display: flex; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 4px; margin-top: 4px;">
+                <span>● ❤️ HP回復量 (体調ボーナス)</span>
+                <span style="font-weight: bold; color: var(--hp-green);">+${result.hpRecover} HP</span>
+            </div>
+        `);
+    }
+    
+    if (!hasAnyPoints && result.hpRecover === 0) {
+        reasonsContainer.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center;">獲得努力値・回復はありません。</div>';
+    }
+    
+    // 明日の一手のプレビュー
+    if (nextAction) {
+        reasonsContainer.insertAdjacentHTML('beforeend', `
+            <div style="font-size: 0.75rem; color: #fff; display: flex; flex-direction: column; gap: 2px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 4px; margin-top: 4px;">
+                <span style="color: var(--accent-blue); font-weight: bold;">🎯 明日の一手 (最優先クエストの自動生成)</span>
+                <span style="color: var(--text-secondary); line-height: 1.3; padding-left: 10px;">「【明日の一手】${escapeHtml(nextAction)}」</span>
+            </div>
+        `);
+    }
+    
+    // モーダルを開く
+    document.getElementById('daily-log-preview-modal').style.display = 'flex';
+}
+
+function closeDailyLogPreviewModal() {
+    document.getElementById('daily-log-preview-modal').style.display = 'none';
+}
+
+function submitDailyLogImport() {
+    if (!cachedStatusData) return;
+    
+    const workText = document.getElementById('daily-log-work').value.trim();
+    const nextAction = document.getElementById('daily-log-next').value.trim();
+    
+    // 手動調整された値を取得
+    const params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
+    const finalChanges = {};
+    const finalDetails = {};
+    
+    let dailyPointsTotal = 0;
+    params.forEach(p => {
+        const val = parseInt(document.getElementById(`adjust-${p}`).value) || 0;
+        finalChanges[p] = val;
+        dailyPointsTotal += val;
+        
+        // 内訳の再構築
+        if (lastEvaluatedLog && val === lastEvaluatedLog.changes[p]) {
+            finalDetails[p] = lastEvaluatedLog.details[p];
+        } else if (val > 0) {
+            finalDetails[p] = { "手動調整": val };
+        } else {
+            finalDetails[p] = {};
+        }
+    });
+    
+    const hpRecover = parseInt(document.getElementById('adjust-HP-recover').value) || 0;
+    
+    // クローンの作成
+    const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
+    
+    // 1. 努力値の加算
+    params.forEach(p => {
+        updatedData.training[p] = (updatedData.training[p] || 0) + finalChanges[p];
+    });
+    
+    // 2. HP回復
+    const hp = updatedData.status.HP || { current: 100, max: 100 };
+    const oldHp = hp.current;
+    hp.current = Math.min(hp.max, hp.current + hpRecover);
+    const actualRecovered = hp.current - oldHp;
+    
+    // 3. 履歴追加
+    const today = getTodayString();
+    
+    // 重複した日付かチェックして reflected_dates に追加
+    if (!updatedData.reflected_dates) updatedData.reflected_dates = [];
+    if (!updatedData.reflected_dates.includes(today)) {
+        updatedData.reflected_dates.push(today);
+    }
+    
+    const pts = [];
+    params.forEach(p => {
+        if (finalChanges[p] > 0) pts.push(`${p}+${finalChanges[p]}`);
+    });
+    const ptsStr = pts.length > 0 ? pts.join(', ') : 'なし';
+    
+    const eventText = `Daily Log Reflected: ${today} (${ptsStr})`;
+    
+    if (!updatedData.history) updatedData.history = [];
+    updatedData.history.push({
+        "date": today,
+        "event": eventText,
+        "status_change": finalChanges,
+        "status_change_detail": finalDetails,
+        "summary": `【今日やったこと】${workText}`
+    });
+    
+    // HP回復履歴の追加
+    if (actualRecovered > 0) {
+        updatedData.history.push({
+            "date": today,
+            "event": `HP Recovered: +${actualRecovered} HP (Condition Recovery)`,
+            "status_change": {}
+        });
+    }
+    
+    // 4. 明日の一手の自動クエスト生成
+    if (nextAction) {
+        if (!updatedData.quests) updatedData.quests = [];
+        updatedData.quests.push({
+            "step": "Rank B",
+            "title": `【明日の一手】${nextAction}`,
+            "description": "デイリー簡易ログより自動生成された最優先任務。",
+            "client": "自分自身",
+            "reward": "MND +5",
+            "original_title": `【明日の一手】${nextAction}`,
+            "status": "pending",
+            "due": "today",
+            "weight": "heavy"
+        });
+    }
+    
+    // 各ステータスの100ポイント毎チケット回復判定 (status.py 1308行相当のJS移植)
+    params.forEach(p => {
+        const oldVal = cachedStatusData.training[p] || 0;
+        const newVal = updatedData.training[p] || 0;
+        const oldTickets = Math.floor(oldVal / 100);
+        const newTickets = Math.floor(newVal / 100);
+        const earned = newTickets - oldTickets;
+        if (earned > 0) {
+            if (!updatedData.tickets) updatedData.tickets = {};
+            updatedData.tickets[p] = (updatedData.tickets[p] || 0) + earned;
+            updatedData.history.push({
+                "date": today,
+                "event": `Measurement Ticket (${p}) Obtained by Training Points (Accumulated: ${newVal}pts)`,
+                "status_change": {}
+            });
+        }
+    });
+    
+    // 5. 保存と同期
+    const importBtn = document.getElementById('preview-import-btn');
+    if (importBtn) {
+        importBtn.disabled = true;
+        importBtn.innerText = "同期中...";
+    }
+    
+    saveStatusDataToFirestore(updatedData)
+    .then(() => {
+        alert("デイリーログのインポートと一撃同期が成功しました！");
+        closeDailyLogPreviewModal();
+        
+        // フォームのリセット
+        document.getElementById('daily-log-work').value = '';
+        document.getElementById('daily-log-next').value = '';
+        document.getElementById('daily-log-condition').value = '3';
+        document.getElementById('daily-log-mood').value = '3';
+        
+        // UIロード
+        fetchStatusData().then(() => {
+            // ステータスタブに切り替える
+            switchTab('status-tab');
+        });
+    })
+    .catch(err => {
+        console.error("デイリーログ同期エラー:", err);
+        alert("クラウドデータベースへの同期に失敗しました。オフライン状態か接続を確認してください。");
+        if (importBtn) {
+            importBtn.disabled = false;
+            importBtn.innerText = "確定してインポート (一撃同期)";
+        }
     });
 }
 
