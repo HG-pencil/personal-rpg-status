@@ -2,12 +2,19 @@ import os
 import json
 import sys
 
+# Windows環境での標準出力エンコーディング対策
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
 
 def main():
     base_path = get_base_path()
-    filepath = os.path.join(base_path, "status.json")
+    filepath = os.path.join(base_path, "status_HG_pencil.json")
     
     if not os.path.exists(filepath):
         print("エラー: status.json が見つかりません。")

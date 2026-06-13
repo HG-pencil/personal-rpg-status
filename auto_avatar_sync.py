@@ -3,21 +3,10 @@ import sys
 import json
 import urllib.request
 
+from status import pull_from_firestore
+
 def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
-
-def pull_from_firestore():
-    url = "https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/HG_pencil"
-    try:
-        req = urllib.request.Request(url, method='GET')
-        with urllib.request.urlopen(req, timeout=5) as res:
-            doc = json.loads(res.read().decode('utf-8'))
-            status_json = doc.get("fields", {}).get("status_json", {}).get("stringValue", "")
-            if status_json:
-                return json.loads(status_json)
-    except Exception:
-        pass
-    return None
 
 def main():
     base_path = get_base_path()
