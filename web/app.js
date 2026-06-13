@@ -212,80 +212,14 @@ function toggleAuthView(showSignup) {
     }
 }
 
-// 新規アカウント作成（サインアップ）処理
+// 新規アカウント作成（サインアップ）処理 (管理者登録制移行に伴い無効化)
 function registerUser() {
-    const emailInput = document.getElementById('signup-email');
-    const passwordInput = document.getElementById('signup-password');
-    const confirmPasswordInput = document.getElementById('signup-confirm-password');
     const errorMsgEl = document.getElementById('auth-error-msg');
-    
-    if (!emailInput || !passwordInput || !confirmPasswordInput) return;
-    
-    const email = emailInput.value.trim();
-    const password = passwordInput.value;
-    const confirmPassword = confirmPasswordInput.value;
-    
-    if (!email || !password || !confirmPassword) {
-        if (errorMsgEl) {
-            errorMsgEl.innerText = "すべてのフィールドを入力してください。";
-            errorMsgEl.style.display = "block";
-        }
-        return;
+    if (errorMsgEl) {
+        errorMsgEl.innerText = "現在、新規アカウント作成は制限されています。管理者へ直接ご連絡ください。";
+        errorMsgEl.style.display = "block";
     }
-    
-    if (password !== confirmPassword) {
-        if (errorMsgEl) {
-            errorMsgEl.innerText = "パスワードと確認用パスワードが一致しません。";
-            errorMsgEl.style.display = "block";
-        }
-        return;
-    }
-    
-    if (password.length < 6) {
-        if (errorMsgEl) {
-            errorMsgEl.innerText = "パスワードは6文字以上で指定してください。";
-            errorMsgEl.style.display = "block";
-        }
-        return;
-    }
-    
-    if (errorMsgEl) errorMsgEl.style.display = "none";
-    
-    const registerBtn = document.querySelector('#auth-signup-view .btn-primary');
-    const originalText = registerBtn ? registerBtn.innerText : "REGISTER";
-    if (registerBtn) {
-        registerBtn.disabled = true;
-        registerBtn.innerText = "CREATING...";
-    }
-    
-    firebase.auth().createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-            if (registerBtn) {
-                registerBtn.disabled = false;
-                registerBtn.innerText = originalText;
-            }
-        })
-        .catch(error => {
-            console.error("Registration failed:", error);
-            if (registerBtn) {
-                registerBtn.disabled = false;
-                registerBtn.innerText = originalText;
-            }
-            if (errorMsgEl) {
-                let message = "アカウントの作成に失敗しました。";
-                if (error.code === 'auth/email-already-in-use') {
-                    message = "このメールアドレスは既に登録されています。";
-                } else if (error.code === 'auth/invalid-email') {
-                    message = "メールアドレスの形式が正しくありません。";
-                } else if (error.code === 'auth/weak-password') {
-                    message = "パスワードが弱すぎます。6文字以上必要です。";
-                } else {
-                    message = error.message;
-                }
-                errorMsgEl.innerText = message;
-                errorMsgEl.style.display = "block";
-            }
-        });
+    return;
 }
 
 // 新規ユーザー用の初期ドキュメント生成処理

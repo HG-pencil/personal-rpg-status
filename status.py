@@ -388,6 +388,19 @@ def get_base_path():
 
 
 def load_auth_config():
+    # 1. OS環境変数からの取得を試みる
+    env_email = os.environ.get("RPG_EMAIL")
+    env_password = os.environ.get("RPG_PASSWORD")
+    env_uid = os.environ.get("RPG_UID")
+    
+    if env_email and env_password:
+        return {
+            "email": env_email,
+            "password": env_password,
+            "uid": env_uid
+        }
+        
+    # 2. 環境変数がない場合は config_auth.json からロード (下位互換フォールバック)
     base_path = get_base_path()
     config_path = os.path.join(base_path, "config_auth.json")
     if os.path.exists(config_path):
