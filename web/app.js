@@ -351,6 +351,10 @@ function initializeUserDocumentIfNotExist(uid) {
 function migrateStatusData(data) {
     if (!data) return data;
     let modified = false;
+    if (data.revision === undefined) {
+        data.revision = 1;
+        modified = true;
+    }
     if (!data.unlocked_achievements) {
         data.unlocked_achievements = [];
         modified = true;
@@ -407,6 +411,235 @@ function migrateStatusData(data) {
     return data;
 }
 
+let originalBaseData = null; // ベースラインデータのグローバル保持
+
+// 個人情報のマスキング用テキスト置換
+function maskText(text) {
+    if (!text) return text;
+    let t = text;
+    const replacements = [
+        { pattern: /eGFR\s*\d+(\.\d+)?/gi, replacement: "健康指標" },
+        { pattern: /LDLコレス\S*/g, replacement: "コレステロール" },
+        { pattern: /BMI\s*\d+(\.\d+)?/gi, replacement: "体型指標" },
+        { pattern: /シーパップ|CPAP/gi, replacement: "呼吸支援デバイス" },
+        { pattern: /投資/g, replacement: "商業取引" },
+        { pattern: /株式|FX/g, replacement: "アセット" },
+        { pattern: /損切り|撤退基準/g, replacement: "リスク管理規律" },
+        { pattern: /情シス|情システム/g, replacement: "管理部門" },
+        { pattern: /会社|就業規則/g, replacement: "ギルド規則" },
+        { pattern: /妻/g, replacement: "聖域の守護者" },
+        { pattern: /Kintone/gi, replacement: "魔導データベース" },
+        { pattern: /BOOTH/gi, replacement: "アイテム市場" }
+    ];
+    replacements.forEach(r => {
+        t = t.replace(r.pattern, r.replacement);
+    });
+    return t;
+}
+
+// 送信データの個人情報マスキング
+function maskSensitiveData(data) {
+    if (!data) return data;
+    const copy = JSON.parse(JSON.stringify(data));
+    
+    // 1. 履歴 (history) の summary を完全消去し、event をマスク
+    if (copy.history) {
+        copy.history.forEach(h => {
+            if (h.summary !== undefined) {
+                delete h.summary;
+            }
+            if (h.event) {
+                h.event = maskText(h.event);
+            }
+        });
+    }
+    
+    // 2. クエスト (quests) の description をマスク
+    if (copy.quests) {
+        copy.quests.forEach(q => {
+            if (q.description) {
+                q.description = maskText(q.description);
+            }
+        });
+    }
+    
+    // 3. 保留中の解答 (pending_answers) の記述回答をプレースホルダー化
+    if (copy.pending_answers) {
+        copy.pending_answers.forEach(ans => {
+            if (ans.answer && ans.test_id && !ans.test_id.startsWith("TRAIN-")) {
+                ans.answer = "[記述回答はローカルにのみ保存されています]";
+            }
+        });
+    }
+    
+    return copy;
+}
+
+// 3者間マージ（クラウド、ローカル更新データ、ローカルでのベース）
+function mergeStatusData(cloud, local, base) {
+    const merged = JSON.parse(JSON.stringify(cloud));
+    const params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
+    
+    // 1. training（努力値）のマージ（ベースからの増分をクラウドへ加算）
+    params.forEach(p => {
+        const localVal = local.training ? (local.training[p] || 0) : 0;
+        const baseVal = base && base.training ? (base.training[p] || 0) : 0;
+        const delta = localVal - baseVal;
+        if (delta > 0) {
+            merged.training = merged.training || {};
+            const oldVal = merged.training[p] || 0;
+            merged.training[p] = oldVal + delta;
+            
+            // チケットの自動獲得判定
+            merged.tickets = merged.tickets || {};
+            const ticketsEarned = Math.floor(merged.training[p] / 100) - Math.floor(oldVal / 100);
+            if (ticketsEarned > 0) {
+                merged.tickets[p] = (merged.tickets[p] || 0) + ticketsEarned;
+                merged.history = merged.history || [];
+                merged.history.push({
+                    "date": getTodayString(),
+                    "event": `Measurement Ticket (${p}) Obtained by Training Points (Accumulated: ${merged.training[p]}pts)`,
+                    "status_change": {}
+                });
+            }
+        }
+    });
+    
+    // 2. tickets（チケット数）のマージ（ベースからの増分/減分を反映）
+    const ticketTypes = ["all", ...params];
+    ticketTypes.forEach(t => {
+        const localCount = local.tickets ? (local.tickets[t] || 0) : 0;
+        const baseCount = base && base.tickets ? (base.tickets[t] || 0) : 0;
+        const delta = localCount - baseCount;
+        if (delta !== 0) {
+            merged.tickets = merged.tickets || {};
+            merged.tickets[t] = Math.max(0, (merged.tickets[t] || 0) + delta);
+        }
+    });
+    
+    // 3. history（履歴）のマージ（重複排除）
+    const cloudEvents = new Set((cloud.history || []).map(h => `${h.date}_${h.event}`));
+    (local.history || []).forEach(lh => {
+        const key = `${lh.date}_${lh.event}`;
+        if (!cloudEvents.has(key)) {
+            merged.history = merged.history || [];
+            merged.history.push(lh);
+        }
+    });
+    merged.history.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // 4. quests（クエスト）のマージ（localで完了になったものを反映）
+    if (local.quests) {
+        merged.quests = merged.quests || [];
+        local.quests.forEach(lq => {
+            if (lq.status === "completed") {
+                const mq = merged.quests.find(q => q.title === lq.title);
+                if (mq && mq.status !== "completed") {
+                    mq.status = "completed";
+                }
+            }
+        });
+    }
+    
+    // 5. custom_title / active_archetype
+    if (local.custom_title !== (base ? base.custom_title : "")) {
+        merged.custom_title = local.custom_title;
+        merged.active_title_parts = [...(local.active_title_parts || [])];
+        merged.titles = merged.titles || { active: [] };
+        merged.titles.active = [...(local.titles ? (local.titles.active || []) : [])];
+    }
+    
+    if (local.active_archetype !== (base ? base.active_archetype : "Novice")) {
+        merged.active_archetype = local.active_archetype;
+        merged.archetypes = [...(local.archetypes || [])];
+    }
+    
+    // 6. pending_answers のマージ
+    const cloudPendingIds = new Set((cloud.pending_answers || []).map(ans => ans.test_id));
+    (local.pending_answers || []).forEach(ans => {
+        if (!cloudPendingIds.has(ans.test_id)) {
+            merged.pending_answers = merged.pending_answers || [];
+            merged.pending_answers.push(ans);
+        }
+    });
+    
+    // 7. statusの値（current/peak）は高い方を採用
+    params.forEach(p => {
+        const cloudP = cloud.status ? (cloud.status[p] || {current: 100, peak: 100}) : {current: 100, peak: 100};
+        const localP = local.status ? (local.status[p] || {current: 100, peak: 100}) : {current: 100, peak: 100};
+        
+        merged.status = merged.status || {};
+        merged.status[p] = {
+            current: Math.max(cloudP.current || 100, localP.current || 100),
+            peak: Math.max(cloudP.peak || 100, localP.peak || 100),
+            last_measured: cloudP.last_measured || localP.last_measured
+        };
+    });
+    
+    // HPはクラウドの現在値を優先
+    const cloudHp = cloud.status && cloud.status.HP ? cloud.status.HP : {current: 100, max: 100};
+    const localHp = local.status && local.status.HP ? local.status.HP : {current: 100, max: 100};
+    merged.status.HP = {
+        current: Math.min(cloudHp.current, localHp.current),
+        max: cloudHp.max || 100
+    };
+    
+    return merged;
+}
+
+// 楽観的ロックを用いたFirestore保存処理
+function saveStatusDataToFirestore(updatedData) {
+    if (!updatedData) return Promise.reject("データがありません");
+    
+    if (!originalBaseData && cachedStatusData) {
+        originalBaseData = JSON.parse(JSON.stringify(cachedStatusData));
+    }
+    
+    if (updatedData.revision === undefined) {
+        updatedData.revision = 1;
+    }
+    
+    return userDocRef.get()
+        .then(doc => {
+            let cloudData = null;
+            if (doc.exists) {
+                cloudData = JSON.parse(doc.data().status_json);
+            }
+            
+            let finalData = updatedData;
+            
+            if (cloudData) {
+                if (cloudData.revision === undefined) cloudData.revision = 1;
+                
+                // 競合チェック: クラウドのrevisionがローカルのベースrevisionと異なる場合
+                const baseRevision = originalBaseData ? (originalBaseData.revision || 1) : 1;
+                if (cloudData.revision !== baseRevision) {
+                    console.warn("競合を検知しました。マージを実行します。 Cloud:", cloudData.revision, "Base:", baseRevision);
+                    finalData = mergeStatusData(cloudData, updatedData, originalBaseData);
+                }
+            }
+            
+            // revisionをインクリメント
+            finalData.revision = (cloudData ? (cloudData.revision || 1) : (finalData.revision || 1)) + 1;
+            finalData.last_updated = new Date().toISOString();
+            
+            // クラウド送信用に個人情報をマスキング
+            const maskedData = maskSensitiveData(finalData);
+            
+            return userDocRef.set({
+                status_json: JSON.stringify(maskedData)
+            }).then(() => {
+                console.log("Firestoreへの同期成功。New Revision:", finalData.revision);
+                // ローカルのキャッシュとベースラインにはマスキング前のデータを保持
+                cachedStatusData = finalData;
+                originalBaseData = JSON.parse(JSON.stringify(finalData));
+                updateUI(finalData);
+                initRadarChart(finalData);
+                return finalData;
+            });
+        });
+}
+
 // Firebase Firestore からデータをフェッチ
 function fetchStatusData() {
     return userDocRef.get()
@@ -417,6 +650,7 @@ function fetchStatusData() {
             let data = JSON.parse(doc.data().status_json);
             data = migrateStatusData(data); // クライアントサイド・マイグレーションの実行
             cachedStatusData = data; // キャッシュに保持
+            originalBaseData = JSON.parse(JSON.stringify(data)); // ベースラインの保存
             updateUI(data);
             initRadarChart(data);
             return data;
@@ -527,14 +761,17 @@ function renderItems(data) {
     Object.keys(tickets).forEach(key => {
         const count = tickets[key];
         if (count > 0 && ticketNames[key]) {
+            const escapedName = escapeHtml(ticketNames[key]);
+            const escapedDesc = escapeHtml(ticketDescs[key]);
+            const escapedCount = escapeHtml(String(count));
             const ticketHtml = `
                 <div class="item-card">
                      <div class="item-icon">${key === "all" ? "🎫" : "🎟️"}</div>
                      <div class="item-info">
-                         <div class="item-name">${ticketNames[key]}</div>
-                         <div class="item-desc">${ticketDescs[key]}</div>
+                         <div class="item-name">${escapedName}</div>
+                         <div class="item-desc">${escapedDesc}</div>
                      </div>
-                     <div class="item-count">x${count}</div>
+                     <div class="item-count">x${escapedCount}</div>
                 </div>
             `;
             itemsContainer.insertAdjacentHTML('beforeend', ticketHtml);
@@ -648,11 +885,17 @@ function renderParamsList(status, training) {
         
         const currDisplay = isUnknown ? "???" : curr;
 
+        const escapedCurr = escapeHtml(String(currDisplay));
+        const escapedPeak = escapeHtml(String(peak));
+        const escapedTraining = escapeHtml(String(training[p] || 0));
+        const escapedShort = escapeHtml(paramNames[p].short);
+        const escapedFull = escapeHtml(paramNames[p].full);
+
         const itemHtml = `
             <div class="param-item">
                 <div class="param-name-container">
-                    <span class="param-short">${paramNames[p].short}</span>
-                    <span class="param-full">${paramNames[p].full}</span>
+                    <span class="param-short">${escapedShort}</span>
+                    <span class="param-full">${escapedFull}</span>
                 </div>
                 <div class="param-bar-wrapper">
                     <div class="param-bar-bg">
@@ -661,8 +904,8 @@ function renderParamsList(status, training) {
                     </div>
                 </div>
                 <div class="param-values">
-                    <span class="val-current">${currDisplay}</span>
-                    <span class="val-peak">Peak: ${peak} | T: ${training[p] || 0}</span>
+                    <span class="val-current">${escapedCurr}</span>
+                    <span class="val-peak">Peak: ${escapedPeak} | T: ${escapedTraining}</span>
                 </div>
             </div>
         `;
@@ -883,16 +1126,20 @@ function loadAvailableTests() {
                 
                 trainingTasks.forEach(test => {
                     const timeMin = test.time_limit_seconds / 60;
+                    const escapedId = escapeHtml(test.id);
+                    const escapedTitle = escapeHtml(test.question.split('\n')[0].replace('【', '').replace('】', ''));
+                    const escapedDiff = escapeHtml(test.difficulty);
+                    const escapedTime = escapeHtml(String(timeMin));
                     const cardHtml = `
                         <div class="test-select-card" style="border-color: rgba(0, 210, 255, 0.25);">
                             <div class="test-card-left">
-                                <div class="test-card-title" style="color: var(--accent-blue);">【追試】${test.question.split('\n')[0].replace('【', '').replace('】', '')}</div>
+                                <div class="test-card-title" style="color: var(--accent-blue);">【追試】${escapedTitle}</div>
                                 <div class="test-card-meta" style="margin-top: 4px;">
-                                    <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${test.difficulty}</span></span>
-                                    <span>制限時間: <span class="meta-time">${timeMin} 分</span></span>
+                                    <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${escapedDiff}</span></span>
+                                    <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
                                 </div>
                             </div>
-                            <button class="btn btn-primary" onclick="startTest('${test.id}')">ミッション開始</button>
+                            <button class="btn btn-primary" onclick="startTest('${escapedId}')">ミッション開始</button>
                         </div>
                     `;
                     container.insertAdjacentHTML('beforeend', cardHtml);
@@ -955,17 +1202,23 @@ function loadAvailableTests() {
                         ? `<span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能</span>` 
                         : `<span class="meta-diff" style="color: var(--accent-red);">チケット不足</span>`;
                     
+                    const escapedId = escapeHtml(test.id);
+                    const escapedParam = escapeHtml(param);
+                    const escapedGate = escapeHtml(String(targetGate));
+                    const escapedDiff = escapeHtml(test.difficulty);
+                    const escapedTime = escapeHtml(String(timeMin));
+                    
                     html += `
                         <div class="test-select-card" style="${!hasTicket ? 'opacity: 0.6; border-color: rgba(255,255,255,0.02);' : ''}">
                             <div class="test-card-left">
-                                <div class="test-card-title">${param} -> ${targetGate} ゲート試験</div>
+                                <div class="test-card-title">${escapedParam} -> ${escapedGate} ゲート試験</div>
                                 <div class="test-card-meta">
-                                    <span>難易度: <span class="meta-diff">${test.difficulty}</span></span>
-                                    <span>制限時間: <span class="meta-time">${timeMin} 分</span></span>
+                                    <span>難易度: <span class="meta-diff">${escapedDiff}</span></span>
+                                    <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
                                     <span>状態: ${ticketStatusHtml}</span>
                                 </div>
                             </div>
-                            <button class="btn btn-primary" ${!hasTicket ? 'disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed;"' : ''} onclick="startTest('${test.id}')">試験開始</button>
+                            <button class="btn btn-primary" ${!hasTicket ? 'disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed;"' : ''} onclick="startTest('${escapedId}')">試験開始</button>
                         </div>
                     `;
                 });
@@ -985,17 +1238,23 @@ function loadAvailableTests() {
                     const targetGate = test.target_gate;
                     const timeMin = test.time_limit_seconds / 60;
                     
+                    const escapedId = escapeHtml(test.id);
+                    const escapedParam = escapeHtml(param);
+                    const escapedGate = escapeHtml(String(targetGate));
+                    const escapedDiff = escapeHtml(test.difficulty);
+                    const escapedTime = escapeHtml(String(timeMin));
+                    
                     html += `
                         <div class="test-select-card">
                             <div class="test-card-left">
-                                <div class="test-card-title">${param} -> ${targetGate} レベル測定</div>
+                                <div class="test-card-title">${escapedParam} -> ${escapedGate} レベル測定</div>
                                 <div class="test-card-meta">
-                                    <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${test.difficulty}</span></span>
-                                    <span>制限時間: <span class="meta-time">${timeMin} 分</span></span>
+                                    <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${escapedDiff}</span></span>
+                                    <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
                                     <span>状態: <span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能 (フリー)</span></span>
                                 </div>
                             </div>
-                            <button class="btn btn-primary" style="background: var(--accent-blue); border-color: var(--accent-blue);" onclick="startTest('${test.id}')">測定開始</button>
+                            <button class="btn btn-primary" style="background: var(--accent-blue); border-color: var(--accent-blue);" onclick="startTest('${escapedId}')">測定開始</button>
                         </div>
                     `;
                 });
@@ -1176,9 +1435,7 @@ function submitTestAnswer(isTimeout = false) {
     updatedData.last_updated = new Date().toISOString();
     
     // Firestore へ同期
-    userDocRef.update({
-        status_json: JSON.stringify(updatedData)
-    })
+    saveStatusDataToFirestore(updatedData)
     .then(() => {
         // 通常試験完了時の表示を初期状態に戻す
         document.querySelector('#test-complete-view .complete-icon').innerText = "📝";
@@ -1267,12 +1524,8 @@ function abandonTest() {
         "submitted_at": new Date().toISOString()
     });
     
-    updatedData.last_updated = new Date().toISOString();
-    
     // Firestore へ同期
-    userDocRef.update({
-        status_json: JSON.stringify(updatedData)
-    })
+    saveStatusDataToFirestore(updatedData)
     .then(() => {
         switchTestView('test-select-view');
         fetchStatusData().then(() => {
@@ -1363,12 +1616,8 @@ function judgeTrainingCode() {
                     "status_change": {}
                 });
                 
-                updatedData.last_updated = new Date().toISOString();
-                
                 // Firestore 同期
-                userDocRef.update({
-                    status_json: JSON.stringify(updatedData)
-                })
+                saveStatusDataToFirestore(updatedData)
                 .then(() => {
                     document.querySelector('#test-complete-view .complete-icon').innerText = "🎉";
                     document.querySelector('#test-complete-view .complete-title').innerText = "追試ミッション合格！";
@@ -1531,16 +1780,21 @@ function renderAchievementsAndWords() {
                     const isUnlocked = unlocked.includes(ach.id);
                     const icon = isUnlocked ? "🥇" : "🔒";
                     const cardClass = isUnlocked ? "badge-card unlocked" : "badge-card";
+                    
+                    const escapedName = escapeHtml(ach.name);
+                    const escapedDesc = escapeHtml(ach.desc);
+                    const escapedRewardWords = ach.reward_words.map(w => `「${escapeHtml(w)}」`).join(' ');
+                    
                     const rewardWordsText = isUnlocked 
-                        ? `<div style="font-size: 0.65rem; color: var(--timer-yellow); font-weight: bold; margin-top: 4px;">🎁 解放単語: ${ach.reward_words.map(w => `「${w}」`).join(' ')}</div>` 
+                        ? `<div style="font-size: 0.65rem; color: var(--timer-yellow); font-weight: bold; margin-top: 4px;">🎁 解放単語: ${escapedRewardWords}</div>` 
                         : `<div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">🔒 報酬: ???</div>`;
                     
                     const badgeHtml = `
                         <div class="${cardClass}" title="${isUnlocked ? '解除済み' : '未解除'}">
                             <div class="badge-icon">${icon}</div>
                             <div class="badge-info">
-                                <div class="badge-name">${ach.name}</div>
-                                <div class="badge-desc">${ach.desc}</div>
+                                <div class="badge-name">${escapedName}</div>
+                                <div class="badge-desc">${escapedDesc}</div>
                                 ${rewardWordsText}
                             </div>
                         </div>
@@ -1594,8 +1848,9 @@ function renderAchievementsAndWords() {
         ownedWords.forEach(word => {
             const isUsed = currentBuildTitleParts.includes(word);
             const chipClass = isUsed ? "word-chip used" : "word-chip";
+            const escapedWord = escapeHtml(word);
             
-            const chipHtml = `<span class="${chipClass}" onclick="${isUsed ? '' : `selectPart('${word}')`}">${word}</span>`;
+            const chipHtml = `<span class="${chipClass}" onclick="${isUsed ? '' : `selectPart(this.textContent)`}">${escapedWord}</span>`;
             wordsContainer.insertAdjacentHTML('beforeend', chipHtml);
         });
     }
@@ -1643,8 +1898,6 @@ function saveCustomTitle() {
         updatedData.titles.active = [];
     }
     
-    updatedData.last_updated = new Date().toISOString();
-    
     // 保存ボタンを一時的に無効化
     const saveBtn = document.querySelector('.modal-footer .btn-primary');
     if (saveBtn) {
@@ -1652,9 +1905,7 @@ function saveCustomTitle() {
         saveBtn.innerText = "保存中...";
     }
     
-    userDocRef.update({
-        status_json: JSON.stringify(updatedData)
-    })
+    saveStatusDataToFirestore(updatedData)
     .then(() => {
         closeAchievementModal();
         fetchStatusData().then(() => {
@@ -2082,19 +2333,24 @@ function renderArchetypesList() {
         if (isActive) cardClass += " active";
         if (!isUnlocked) cardClass += " locked";
         
+        const escapedId = escapeHtml(arch.id);
+        const escapedName = escapeHtml(arch.name);
+        const escapedDesc = escapeHtml(arch.desc);
+        const escapedCondDesc = escapeHtml(arch.condDesc);
+
         const buttonHtml = isActive
             ? `<button class="btn btn-primary" disabled style="background: rgba(46, 213, 115, 0.2); border-color: #2ed573; color: #2ed573; cursor: default;">装備中</button>`
             : isUnlocked
-                ? `<button class="btn btn-primary" onclick="changeArchetype('${arch.id}')">転職する</button>`
+                ? `<button class="btn btn-primary" onclick="changeArchetype('${escapedId}')">転職する</button>`
                 : `<button class="btn btn-primary" disabled style="background: #3a3b3c; border-color: transparent; cursor: not-allowed; color: rgba(255,255,255,0.3);">未解放</button>`;
                 
         const cardHtml = `
             <div class="${cardClass}">
                 <div class="archetype-icon">${isActive ? "✨" : isUnlocked ? "🔓" : "🔒"}</div>
                 <div class="archetype-info">
-                    <div class="archetype-name">${arch.name} <span class="archetype-id-tag">(${arch.id})</span></div>
-                    <div class="archetype-desc">${arch.desc}</div>
-                    <div class="archetype-cond">条件: <span class="${isUnlocked ? 'cond-ok' : 'cond-fail'}">${arch.condDesc}</span></div>
+                    <div class="archetype-name">${escapedName} <span class="archetype-id-tag">(${escapedId})</span></div>
+                    <div class="archetype-desc">${escapedDesc}</div>
+                    <div class="archetype-cond">条件: <span class="${isUnlocked ? 'cond-ok' : 'cond-fail'}">${escapedCondDesc}</span></div>
                 </div>
                 <div class="archetype-action">
                     ${buttonHtml}
@@ -2119,8 +2375,6 @@ function changeArchetype(archetypeId) {
     
     const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
     updatedData.active_archetype = archetypeId;
-    updatedData.last_updated = new Date().toISOString();
-    
     // 互換性のため archetypes 配列も更新
     updatedData.archetypes = [archetypeId];
     
@@ -2135,9 +2389,7 @@ function changeArchetype(archetypeId) {
     // 保存ボタンを一時的に無効化
     const saveBtn = document.querySelector('#archetypes-list-container .archetype-card.active button');
     
-    userDocRef.update({
-        status_json: JSON.stringify(updatedData)
-    })
+    saveStatusDataToFirestore(updatedData)
     .then(() => {
         alert(`${archDef.name} に転職しました！`);
         closeArchetypeModal();

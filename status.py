@@ -446,7 +446,188 @@ def pull_from_firestore(user_id="HG_pencil"):
         print(f"[!] クラウドからのデータ取得に失敗しました (オフライン動作): {e}")
     return None
 
+# 個人情報のマスキング用テキスト置換
+def mask_text(text):
+    if not text:
+        return text
+    t = text
+    # 置換ルール (健康データ、プライベート情報、会社名など)
+    replacements = [
+        (r'(?i)eGFR\s*\d+(\.\d+)?', '健康指標'),
+        (r'LDLコレス\S*', 'コレステロール'),
+        (r'(?i)BMI\s*\d+(\.\d+)?', '体型指標'),
+        (r'(?i)シーパップ|CPAP', '呼吸支援デバイス'),
+        (r'投資', '商業取引'),
+        (r'株式|FX', 'アセット'),
+        (r'損切り|撤退基準', 'リスク管理規律'),
+        (r'情シス|情システム', '管理部門'),
+        (r'会社|就業規則', 'ギルド規則'),
+        (r'妻', '聖域の守護者'),
+        (r'(?i)Kintone', '魔導データベース'),
+        (r'(?i)BOOTH', 'アイテム市場')
+    ]
+    for pattern, replacement in replacements:
+        t = re.sub(pattern, replacement, t)
+    return t
+
+# 送信データの個人情報マスキング
+def mask_sensitive_data(data):
+    if not data:
+        return data
+    import copy
+    c = copy.deepcopy(data)
+    
+    # 1. 履歴 (history) の summary を完全消去し、event をマスク
+    if "history" in c:
+        for h in c["history"]:
+            if "summary" in h:
+                del h["summary"]
+            if "event" in h:
+                h["event"] = mask_text(h["event"])
+                
+    # 2. クエスト (quests) の description をマスク
+    if "quests" in c:
+        for q in c["quests"]:
+            if "description" in q:
+                q["description"] = mask_text(q["description"])
+                
+    # 3. 保留中の解答 (pending_answers) の記述回答をプレースホルダー化
+    if "pending_answers" in c:
+        for ans in c["pending_answers"]:
+            test_id = ans.get("test_id", "")
+            if "answer" in ans and test_id and not test_id.startswith("TRAIN-"):
+                ans["answer"] = "[記述回答はローカルにのみ保存されています]"
+                
+    return c
+
+# 3者間マージ
+def merge_status_data(cloud, local, base):
+    import copy
+    merged = copy.deepcopy(cloud)
+    params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
+    
+    # 1. training（努力値）のマージ（ベースからの増分をクラウドへ加算）
+    for p in params:
+        local_val = local.get("training", {}).get(p, 0)
+        base_val = base.get("training", {}).get(p, 0) if base else 0
+        delta = local_val - base_val
+        if delta > 0:
+            merged.setdefault("training", {})
+            old_val = merged["training"].get(p, 0)
+            merged["training"][p] = old_val + delta
+            
+            # チケットの自動獲得判定
+            merged.setdefault("tickets", {})
+            tickets_earned = (merged["training"][p] // 100) - (old_val // 100)
+            if tickets_earned > 0:
+                merged["tickets"][p] = merged["tickets"].get(p, 0) + tickets_earned
+                merged.setdefault("history", []).append({
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "event": f"Measurement Ticket ({p}) Obtained by Training Points (Accumulated: {merged['training'][p]}pts)",
+                    "status_change": {}
+                })
+                
+    # 2. tickets（チケット数）のマージ（ベースからの増分/減分を反映）
+    for t in ["all"] + params:
+        local_count = local.get("tickets", {}).get(t, 0)
+        base_count = base.get("tickets", {}).get(t, 0) if base else 0
+        delta = local_count - base_count
+        if delta != 0:
+            merged.setdefault("tickets", {})
+            merged["tickets"][t] = max(0, merged["tickets"].get(t, 0) + delta)
+            
+    # 3. history（履歴）のマージ（重複排除）
+    cloud_events = {f"{h.get('date')}_{h.get('event')}" for h in cloud.get("history", [])}
+    for lh in local.get("history", []):
+        key = f"{lh.get('date')}_{lh.get('event')}"
+        if key not in cloud_events:
+            merged.setdefault("history", []).append(lh)
+    merged["history"].sort(key=lambda x: x.get("date", ""))
+    
+    # 4. quests（クエスト）のマージ（localでcompletedになったものを反映）
+    if "quests" in local:
+        merged.setdefault("quests", [])
+        for lq in local["quests"]:
+            if lq.get("status") == "completed":
+                for mq in merged["quests"]:
+                    if mq.get("title") == lq.get("title") and mq.get("status") != "completed":
+                        mq["status"] = "completed"
+                        
+    # 5. custom_title / active_archetype
+    local_custom = local.get("custom_title", "")
+    base_custom = base.get("custom_title", "") if base else ""
+    if local_custom != base_custom:
+        merged["custom_title"] = local_custom
+        merged["active_title_parts"] = list(local.get("active_title_parts", []))
+        merged.setdefault("titles", {})["active"] = list(local.get("titles", {}).get("active", []))
+        
+    local_arch = local.get("active_archetype", "Novice")
+    base_arch = base.get("active_archetype", "Novice") if base else "Novice"
+    if local_arch != base_arch:
+        merged["active_archetype"] = local_arch
+        merged["archetypes"] = list(local.get("archetypes", []))
+        
+    # 6. pending_answers のマージ
+    cloud_pending_ids = {ans.get("test_id") for ans in cloud.get("pending_answers", [])}
+    for ans in local.get("pending_answers", []):
+        if ans.get("test_id") not in cloud_pending_ids:
+            merged.setdefault("pending_answers", []).append(ans)
+            
+    # 7. statusの値（current/peak）は高い方を採用
+    for p in params:
+        cloud_p = cloud.get("status", {}).get(p, {"current": 100, "peak": 100})
+        local_p = local.get("status", {}).get(p, {"current": 100, "peak": 100})
+        merged.setdefault("status", {})[p] = {
+            "current": max(cloud_p.get("current", 100), local_p.get("current", 100)),
+            "peak": max(cloud_p.get("peak", 100), local_p.get("peak", 100)),
+            "last_measured": cloud_p.get("last_measured") or local_p.get("last_measured")
+        }
+        
+    # HPはクラウドを優先
+    cloud_hp = cloud.get("status", {}).get("HP", {"current": 100, "max": 100})
+    local_hp = local.get("status", {}).get("HP", {"current": 100, "max": 100})
+    merged["status"]["HP"] = {
+        "current": min(cloud_hp.get("current", 100), local_hp.get("current", 100)),
+        "max": cloud_hp.get("max", 100)
+    }
+    
+    return merged
+
 def push_to_firestore(data, user_id="HG_pencil"):
+    # 1. 競合チェックのために、最新データをGET
+    cloud_data = pull_from_firestore(user_id)
+    
+    final_data = data
+    if cloud_data:
+        if "revision" not in cloud_data:
+            cloud_data["revision"] = 1
+        if "revision" not in data:
+            data["revision"] = 1
+            
+        # クラウドの revision がローカルデータの revision と異なる場合 ➔ 競合
+        if cloud_data["revision"] != data.get("revision", 1):
+            print(f"[*] 同期競合を検知しました (Cloud revision: {cloud_data['revision']}, Local revision: {data.get('revision', 1)})。マージ処理を実行します...")
+            
+            # ロード直前の元のファイルをベースラインとして読み込む
+            base_data = None
+            base_filepath = os.path.join(get_base_path(), f"status_{user_id}.json")
+            if os.path.exists(base_filepath):
+                try:
+                    with open(base_filepath, 'r', encoding='utf-8') as f:
+                        base_data = json.load(f)
+                except Exception:
+                    pass
+            
+            final_data = merge_status_data(cloud_data, data, base_data)
+            
+    # revision をインクリメント
+    final_revision = (cloud_data.get("revision", 1) if cloud_data else data.get("revision", 1)) + 1
+    final_data["revision"] = final_revision
+    final_data["last_updated"] = datetime.now().isoformat()
+    
+    # 2. 公開用に個人情報をマスキング
+    masked_data = mask_sensitive_data(final_data)
+    
     config = load_auth_config()
     headers = {'Content-Type': 'application/json'}
     if config:
@@ -461,7 +642,7 @@ def push_to_firestore(data, user_id="HG_pencil"):
         import urllib.request
         import json
         
-        data_str = json.dumps(data, ensure_ascii=False, indent=2)
+        data_str = json.dumps(masked_data, ensure_ascii=False, indent=2)
         doc = {
             'fields': {
                 'status_json': {
@@ -477,6 +658,15 @@ def push_to_firestore(data, user_id="HG_pencil"):
             method='PATCH'
         )
         with urllib.request.urlopen(req, timeout=5) as res:
+            # 競合マージ等が発生した場合、ローカルの status_HG_pencil.json も更新
+            if final_data is not data:
+                filepath = os.path.join(get_base_path(), f"status_{user_id}.json")
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(final_data, f, ensure_ascii=False, indent=2)
+                    print(f"[+] マージ後のデータをローカルキャッシュに保存しました: {filepath}")
+                except Exception as e:
+                    print(f"[!] マージデータのローカルキャッシュ保存に失敗しました: {e}")
             return True
     except Exception as e:
         print(f"[!] クラウドへのデータ同期に失敗しました: {e}")
@@ -485,6 +675,8 @@ def push_to_firestore(data, user_id="HG_pencil"):
 def migrate_data(data):
     if not data:
         return data
+    if "revision" not in data:
+        data["revision"] = 1
     tickets = data.setdefault("tickets", {})
     # 古い measurement キーがあれば all に変換して削除
     if "measurement" in tickets:
