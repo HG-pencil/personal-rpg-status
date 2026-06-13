@@ -16,6 +16,35 @@ let currentUserId = localStorage.getItem('rpg_user_id') || 'HG_pencil';
 let userDocRef = db.collection('users').doc(currentUserId);
 let userList = ['HG_pencil'];
 
+// Firebase Auth によるログイン状態の監視
+firebase.auth().onAuthStateChanged(user => {
+    const authModal = document.getElementById('auth-modal');
+    const loggedInUserInfo = document.getElementById('logged-in-user-info');
+    const userEmailDisplay = document.getElementById('current-user-email');
+    
+    if (user) {
+        // ログイン状態
+        currentUserId = user.uid;
+        userDocRef = db.collection('users').doc(currentUserId);
+        
+        if (authModal) authModal.style.display = 'none';
+        if (loggedInUserInfo) loggedInUserInfo.style.display = 'flex';
+        if (userEmailDisplay) userEmailDisplay.innerText = user.email;
+        
+        // ステータスデータのロード
+        fetchStatusData();
+    } else {
+        // 未ログイン状態
+        currentUserId = '';
+        if (authModal) authModal.style.display = 'flex';
+        if (loggedInUserInfo) loggedInUserInfo.style.display = 'none';
+        
+        // ログインフォームの入力欄にフォーカス
+        const emailInput = document.getElementById('login-email');
+        if (emailInput) emailInput.focus();
+    }
+});
+
 
 // グローバル変数
 let statusChart = null;
@@ -47,19 +76,6 @@ async function getPyodide() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // ユーザーリストのロードと、ステータスデータのロード
-    loadUserList().then(() => {
-        fetchStatusData();
-    });
-    
-    // ユーザーセレクターの変更イベントリスナーを設定
-    const userSelector = document.getElementById('user-selector');
-    if (userSelector) {
-        userSelector.addEventListener('change', (e) => {
-            switchUser(e.target.value);
-        });
-    }
-    
     // textareaでのCtrl+Enter提出ショートカット設定
     const textarea = document.getElementById('test-answer-input');
     if (textarea) {
@@ -76,6 +92,103 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+// ログイン処理
+function loginUser() {
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
+    const errorMsgEl = document.getElementById('auth-error-msg');
+    
+    if (!emailInput || !passwordInput) return;
+    
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) {
+        if (errorMsgEl) {
+            errorMsgEl.innerText = "メールアドレスとパスワードを入力してください。";
+            errorMsgEl.style.display = "block";
+        }
+        return;
+    }
+    
+    if (errorMsgEl) errorMsgEl.style.display = "none";
+    
+    const loginBtn = document.querySelector('#auth-modal .btn-primary');
+    const originalText = loginBtn ? loginBtn.innerText : "LOGIN";
+    if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.innerText = "LOADING...";
+    }
+    
+    firebase.auth().signInWithEmailAndPassword(email, password)
+        .then(() => {
+            if (loginBtn) {
+                loginBtn.disabled = false;
+                loginBtn.innerText = originalText;
+            }
+        })
+        .catch(error => {
+            console.error("Login failed:", error);
+            if (loginBtn) {
+                loginBtn.disabled = false;
+                loginBtn.innerText = originalText;
+            }
+            if (errorMsgEl) {
+                let message = "ログインに失敗しました。";
+                if (error.code === 'auth/invalid-email') {
+                    message = "メールアドレスの形式が正しくありません。";
+                } else if (error.code === 'auth/user-disabled') {
+                    message = "このアカウントは無効化されています。";
+                } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    message = "メールアドレスまたはパスワードが間違っています。";
+                }
+                errorMsgEl.innerText = message;
+                errorMsgEl.style.display = "block";
+            }
+        });
+}
+
+// ログアウト処理
+function logoutUser() {
+    if (confirm("ログアウトしますか？")) {
+        firebase.auth().signOut()
+            .then(() => {
+                cachedStatusData = null;
+                if (statusChart) {
+                    statusChart.destroy();
+                    statusChart = null;
+                }
+                document.getElementById('build-score').innerText = '要ログイン';
+                document.getElementById('combat-power-value').innerText = '0';
+                document.getElementById('hp-value-text').innerText = '0/0';
+                const hpProgress = document.getElementById('hp-progress');
+                if (hpProgress) hpProgress.style.width = '0%';
+                
+                const emailInput = document.getElementById('login-email');
+                const passwordInput = document.getElementById('login-password');
+                if (emailInput) emailInput.value = '';
+                if (passwordInput) passwordInput.value = '';
+                const errorMsgEl = document.getElementById('auth-error-msg');
+                if (errorMsgEl) errorMsgEl.style.display = 'none';
+            })
+            .catch(error => {
+                console.error("Logout failed:", error);
+                alert("ログアウトに失敗しました。");
+            });
+    }
+}
+
+// HTMLエスケープユーティリティ
+function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+    }[tag] || tag));
+}
 
 
 // クライアントサイドでのデータマイグレーション
@@ -101,6 +214,16 @@ function migrateStatusData(data) {
     if (!data.active_archetype) {
         data.active_archetype = "Novice";
         modified = true;
+    }
+    
+    // tickets.measurement から tickets.all への統合マイグレーション
+    if (data.tickets) {
+        if (data.tickets.measurement !== undefined) {
+            const mCount = data.tickets.measurement || 0;
+            data.tickets.all = (data.tickets.all || 0) + mCount;
+            delete data.tickets.measurement;
+            modified = true;
+        }
     }
     
     // 初期実績の自動付与
@@ -322,11 +445,19 @@ function generateAdvisories(data) {
     }
     
     // 4. 測定チケットの案内
-    const tickets = data.tickets || { measurement: 0 };
-    if (tickets.measurement > 0) {
+    const tickets = data.tickets || {};
+    const totalTickets = (tickets.all || 0) + 
+                         (tickets.STR || 0) + 
+                         (tickets.VIT || 0) + 
+                         (tickets.INT || 0) + 
+                         (tickets.WIS || 0) + 
+                         (tickets.MND || 0) + 
+                         (tickets.CHA || 0) + 
+                         (tickets.DEV || 0);
+    if (totalTickets > 0) {
         advisories.push({
             type: "success",
-            text: `🎫 **昇段試験（測定）の案内**<br>現在、測定チケットを ${tickets.measurement} 枚所持しています。頭が十分に回り、コンディションが良いタイミングで「ゲート試験」タブを開き、次のゲート試験に挑戦してください！`
+            text: `🎫 **昇段試験（測定）の案内**<br>現在、測定チケットを合計 ${totalTickets} 枚所持しています。頭が十分に回り、コンディションが良いタイミングで「ゲート試験」タブを開き、次のゲート試験に挑戦してください！`
         });
     }
     
@@ -1065,8 +1196,8 @@ function judgeTrainingCode() {
                 const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
                 
                 // チケット回復
-                if (!updatedData.tickets) updatedData.tickets = { measurement: 0 };
-                updatedData.tickets.measurement = 1;
+                if (!updatedData.tickets) updatedData.tickets = { all: 0 };
+                updatedData.tickets.all = (updatedData.tickets.all || 0) + 1;
                 
                 // 履歴追加
                 if (!updatedData.history) updatedData.history = [];
@@ -1092,7 +1223,7 @@ function judgeTrainingCode() {
                         descSubs[0].innerText = "📋 おめでとうございます！コードの出力が期待されるFizzBuzzと完全に一致しました。";
                         descSubs[0].style.color = "var(--hp-green)";
                         descSubs[1].style.display = "block";
-                        descSubs[1].innerText = "測定チケットが1枚回復しました！ステータス画面で確認してください。";
+                        descSubs[1].innerText = "測定チケット（all）が1枚回復しました！ステータス画面で確認してください。";
                         descSubs[2].style.display = "none";
                     }
                     
@@ -1615,17 +1746,20 @@ function renderQuests(data) {
             completedCount++;
         }
         
-        const clientText = q.client || "冒険者ギルド";
-        const rewardText = q.reward || "EXP +100";
+        const clientText = escapeHtml(q.client || "冒険者ギルド");
+        const rewardText = escapeHtml(q.reward || "EXP +100");
+        const escapedTitle = escapeHtml(q.title || "");
+        const escapedDesc = q.description ? escapeHtml(q.description) : "";
+        const escapedStep = escapeHtml(q.step || "");
         
         const questHtml = `
             <div class="quest-card ${isCompleted ? 'completed' : ''}">
                 <div class="quest-card-header">
                     <span class="quest-card-client">FROM: ${clientText}</span>
-                    <span class="quest-card-rank">${q.step}</span>
+                    <span class="quest-card-rank">${escapedStep}</span>
                 </div>
-                <div class="quest-card-title">${q.title}</div>
-                ${q.description ? `<div class="quest-card-desc">${q.description}</div>` : ''}
+                <div class="quest-card-title">${escapedTitle}</div>
+                ${escapedDesc ? `<div class="quest-card-desc">${escapedDesc}</div>` : ''}
                 <div class="quest-card-footer">
                     <div class="quest-card-reward">REWARD: ${rewardText}</div>
                     <div style="font-family: 'Outfit', sans-serif; font-weight: bold; color: ${isCompleted ? '#ab2c16' : '#70542d'};">

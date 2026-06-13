@@ -14,3 +14,4 @@ pending_answers_*.json
 .env.*
 .DS_Store
 Thumbs.db
+config_auth.json

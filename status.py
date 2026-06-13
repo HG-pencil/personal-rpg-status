@@ -387,12 +387,56 @@ def get_base_path():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def load_auth_config():
+    base_path = get_base_path()
+    config_path = os.path.join(base_path, "config_auth.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[!] 認証設定ファイルの読み込みに失敗しました: {e}")
+    return None
+
+def get_auth_token(email, password):
+    api_key = "AIzaSyA-65Hz0doOnYw8YcrUSvWHgs1Zi99eiLI"
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+    try:
+        import urllib.request
+        import json
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=5) as res:
+            resp = json.loads(res.read().decode('utf-8'))
+            return resp.get("idToken")
+    except Exception as e:
+        print(f"[!] 認証トークンの取得に失敗しました: {e}")
+    return None
+
 def pull_from_firestore(user_id="HG_pencil"):
+    config = load_auth_config()
+    headers = {}
+    if config:
+        token = get_auth_token(config.get("email"), config.get("password"))
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if config.get("uid"):
+            user_id = config.get("uid")
+            
     url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
     try:
         import urllib.request
         import json
-        req = urllib.request.Request(url, method='GET')
+        req = urllib.request.Request(url, headers=headers, method='GET')
         with urllib.request.urlopen(req, timeout=5) as res:
             doc = json.loads(res.read().decode('utf-8'))
             status_json = doc.get("fields", {}).get("status_json", {}).get("stringValue", "")
@@ -403,6 +447,15 @@ def pull_from_firestore(user_id="HG_pencil"):
     return None
 
 def push_to_firestore(data, user_id="HG_pencil"):
+    config = load_auth_config()
+    headers = {'Content-Type': 'application/json'}
+    if config:
+        token = get_auth_token(config.get("email"), config.get("password"))
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if config.get("uid"):
+            user_id = config.get("uid")
+            
     url = f"https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{user_id}"
     try:
         import urllib.request
@@ -420,7 +473,7 @@ def push_to_firestore(data, user_id="HG_pencil"):
         req = urllib.request.Request(
             url,
             data=json.dumps(doc).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
+            headers=headers,
             method='PATCH'
         )
         with urllib.request.urlopen(req, timeout=5) as res:

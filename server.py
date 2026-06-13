@@ -177,10 +177,6 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     # 測定チケットの消費（通常のゲート試験の場合のみ消費）
                     if not is_training_task and not is_measurement:
-                        curr_tickets = tickets.get("measurement", 0)
-                        if curr_tickets > 0:
-                            tickets["measurement"] = curr_tickets - 1
-                        
                         param = submitted_answer.get("param")
                         if param:
                             if tickets.get(param, 0) > 0:
@@ -314,7 +310,7 @@ class RPGStatusRequestHandler(http.server.SimpleHTTPRequestHandler):
                             status_data = json.load(f)
                         
                         tickets = status_data.get("tickets", {})
-                        tickets["measurement"] = 1 # チケット回復！
+                        tickets["all"] = tickets.get("all", 0) + 1 # 万能チケット回復！
                         
                         # 履歴追加
                         history = status_data.get("history", [])
@@ -369,7 +365,7 @@ def get_local_ip():
     return ip
 
 def main():
-    server_address = ('', PORT)
+    server_address = ('127.0.0.1', PORT)
     socketserver.TCPServer.allow_reuse_address = True
     
     try:
