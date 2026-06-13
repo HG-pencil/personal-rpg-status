@@ -46,5 +46,53 @@
     "difficulty": "Easy",
     "time_limit_seconds": 600,
     "question": "【チケット回復ミッション：Python FizzBuzz実行】\nPythonを用いて、1から30までのFizzBuzz（3の倍数で'Fizz'、5の倍数で'Buzz'、15の倍数で'FizzBuzz'、それ以外は数値そのもの）を出力するプログラムを作成してください。\n以下の入力欄に「Pythonのプログラムコードのみ」を記述し、下の「コードを実行してテスト判定」ボタンを押してテストをパスしてください。"
+  },
+  {
+    "id": "TRAIN-STR-01",
+    "param": "STR",
+    "is_training": true,
+    "difficulty": "Easy",
+    "time_limit_seconds": 600,
+    "question": "【チケット回復ミッション：JRPGダメージ計算】\n攻撃力と防御力、およびクリティカル判定を受け取り、与えるダメージを計算する関数 `calculate_damage(attack, defense, is_critical)` を定義してください。\n- ダメージ = 攻撃力 - 防御力\n- クリティカル時 (`is_critical` が True) はダメージが 1.5 倍（端数切り捨て、int型にキャスト）になります。\n- 防御力が攻撃力以上の場合、ダメージは最小値 `1` になります。\n入力欄には「関数定義のコードのみ」を記述し、テスト判定をパスしてください。"
+  },
+  {
+    "id": "TRAIN-VIT-01",
+    "param": "VIT",
+    "is_training": true,
+    "difficulty": "Easy",
+    "time_limit_seconds": 600,
+    "question": "【チケット回復ミッション：ターン毎のHP計算】\n現在のHP、最大HP、回復量、および毒ダメージを受け取り、ターン終了時の最終HPを計算する関数 `apply_turn_effects(hp, max_hp, regen, poison)` を定義してください。\n- 最終HP = 現在のHP + 回復量 - 毒ダメージ\n- 最終HPは最大HP (`max_hp`) を超えてはならず、また `0` 未満になってはなりません（0以下は0）。\n入力欄には「関数定義のコードのみ」を記述し、テスト判定をパスしてください。"
+  },
+  {
+    "id": "TRAIN-INT-01",
+    "param": "INT",
+    "is_training": true,
+    "difficulty": "Easy",
+    "time_limit_seconds": 600,
+    "question": "【チケット回復ミッション：魔法詠唱計算】\n現在のMP、魔法消費MP、および知能ステータスを受け取り、魔法詠唱後の「残りMP」と「効果威力」のペア (tuple) を返す関数 `cast_spell(mp, cost, int_stat)` を定義してください。\n- MPが足りている場合：残りMP = 現在のMP - 消費MP。効果威力 = 消費MP * (知能ステータス / 100)（端数切り捨ての整数）。これらを `(残りMP, 効果威力)` として返します。\n- MPが足りない場合：詠唱失敗として `(-1, 0)` を返します。\n入力欄には「関数定義のコードのみ」を記述し、テスト判定をパスしてください。"
+  },
+  {
+    "id": "TRAIN-WIS-01",
+    "param": "WIS",
+    "is_training": true,
+    "difficulty": "Easy",
+    "time_limit_seconds": 600,
+    "question": "【チケット回復ミッション：アイテム識別】\nアイテム名を受け取り、対応する種別名を返す関数 `identify_item(item_name)` を定義してください。\n- アイテム名が \"赤の薬草\" ならば \"回復薬\" を返します。\n- アイテム名が \"錆びた鍵\" ならば \"重要アイテム\" を返します。\n- それ以外のアイテム名の場合は \"未知のオブジェクト\" を返します。\n入力欄には「関数定義のコードのみ」を記述し、テスト判定をパスしてください。"
+  },
+  {
+    "id": "TRAIN-MND-01",
+    "param": "MND",
+    "is_training": true,
+    "difficulty": "Easy",
+    "time_limit_seconds": 600,
+    "question": "【チケット回復ミッション：精神障壁ダメージ吸収】\n受けるダメージと精神力バリアの値を受け取り、バリアで吸収した後の残りダメージを返す関数 `absorb_damage(damage, barrier_mnd)` を定義してください。\n- 残りダメージ = ダメージ - 精神力バリアの値\n- 残りダメージは `0` 未満になってはなりません（0以下は0）。\n入力欄には「関数定義のコードのみ」を記述し、テスト判定をパスしてください。"
+  },
+  {
+    "id": "TRAIN-CHA-01",
+    "param": "CHA",
+    "is_training": true,
+    "difficulty": "Easy",
+    "time_limit_seconds": 600,
+    "question": "【チケット回復ミッション：ショップ価格交渉】\nアイテムの元の価格と魅力ステータスを受け取り、割引適用後の購入価格を返す関数 `negotiate_price(base_price, cha_stat)` を定義してください。\n- 割引率 (%) = 魅力ステータス / 10 (float)\n- ただし、割引率の上限は `30%` です。\n- 購入価格 = 元の価格 * (1 - 割引率/100) （端数切り捨ての整数にキャスト）。\n入力欄には「関数定義のコードのみ」を記述し、テスト判定をパスしてください。"
   }
 ]

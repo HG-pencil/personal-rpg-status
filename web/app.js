@@ -1505,6 +1505,80 @@ function judgeTrainingCode() {
             resultBody.innerText = "Pythonコードを実行中...";
         }
         
+        // テスト用のPythonスクリプトを定義
+        let testScript = "";
+        if (activeTest.id === "TRAIN-STR-01") {
+            testScript = `
+try:
+    assert calculate_damage(150, 50, False) == 100, "計算エラー (通常ダメージ)"
+    assert calculate_damage(150, 50, True) == 150, "計算エラー (クリティカルダメージ)"
+    assert calculate_damage(50, 100, False) == 1, "計算エラー (攻撃力 < 防御力時の最小ダメージ1)"
+    print("SUCCESS")
+except AssertionError as ae:
+    print(f"FAIL: {str(ae)}")
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+`;
+        } else if (activeTest.id === "TRAIN-VIT-01") {
+            testScript = `
+try:
+    assert apply_turn_effects(80, 100, 5, 10) == 75, "計算エラー (通常変化)"
+    assert apply_turn_effects(98, 100, 5, 0) == 100, "計算エラー (最大HPクランプ)"
+    assert apply_turn_effects(5, 100, 0, 10) == 0, "計算エラー (最小HPクランプ)"
+    print("SUCCESS")
+except AssertionError as ae:
+    print(f"FAIL: {str(ae)}")
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+`;
+        } else if (activeTest.id === "TRAIN-INT-01") {
+            testScript = `
+try:
+    assert cast_spell(50, 10, 120) == (40, 12), "計算エラー (通常魔法成功)"
+    assert cast_spell(5, 10, 120) == (-1, 0), "計算エラー (MP不足での失敗)"
+    print("SUCCESS")
+except AssertionError as ae:
+    print(f"FAIL: {str(ae)}")
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+`;
+        } else if (activeTest.id === "TRAIN-WIS-01") {
+            testScript = `
+try:
+    assert identify_item("赤の薬草") == "回復薬", "識別エラー (赤の薬草)"
+    assert identify_item("錆びた鍵") == "重要アイテム", "識別エラー (錆びた鍵)"
+    assert identify_item("謎の鉱石") == "未知のオブジェクト", "識別エラー (その他のオブジェクト)"
+    print("SUCCESS")
+except AssertionError as ae:
+    print(f"FAIL: {str(ae)}")
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+`;
+        } else if (activeTest.id === "TRAIN-MND-01") {
+            testScript = `
+try:
+    assert absorb_damage(150, 80) == 70, "計算エラー (通常バリア吸収)"
+    assert absorb_damage(50, 100) == 0, "計算エラー (バリア超過による被ダメージ0)"
+    print("SUCCESS")
+except AssertionError as ae:
+    print(f"FAIL: {str(ae)}")
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+`;
+        } else if (activeTest.id === "TRAIN-CHA-01") {
+            testScript = `
+try:
+    assert negotiate_price(1000, 150) == 850, "計算エラー (15%割引)"
+    assert negotiate_price(1000, 400) == 700, "計算エラー (30%最大割引)"
+    assert negotiate_price(1000, 0) == 1000, "計算エラー (0%割引)"
+    print("SUCCESS")
+except AssertionError as ae:
+    print(f"FAIL: {str(ae)}")
+except Exception as e:
+    print(f"ERROR: {str(e)}")
+`;
+        }
+
         // 出力キャプチャのセットアップ
         pyo.runPython(`
             import sys
@@ -1514,23 +1588,35 @@ function judgeTrainingCode() {
         `);
         
         try {
-            // 非同期実行
+            // ユーザーコードの非同期実行
             await pyo.runPythonAsync(code);
             
-            const stdout = pyo.runPython("sys.stdout.getvalue()");
-            const stderr = pyo.runPython("sys.stderr.getvalue()");
-            
-            if (submitBtn) submitBtn.disabled = false;
-            
-            // 期待される FizzBuzz 出力 (1〜30)
+            let passed = false;
+            let stdout = "";
+            let stderr = "";
             const expectedLines = [
                 "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz",
                 "11", "Fizz", "13", "14", "FizzBuzz", "16", "17", "Fizz", "19", "Buzz",
                 "Fizz", "22", "23", "Fizz", "Buzz", "26", "Fizz", "28", "29", "FizzBuzz"
             ];
+
+            if (activeTest.id === "TRAIN-DEV-01") {
+                stdout = pyo.runPython("sys.stdout.getvalue()");
+                stderr = pyo.runPython("sys.stderr.getvalue()");
+                
+                const actualLines = stdout.trim().split('\n').map(l => l.trim()).filter(l => l);
+                passed = JSON.stringify(actualLines) === JSON.stringify(expectedLines);
+            } else {
+                // テストアサーションコードの実行
+                await pyo.runPythonAsync(testScript);
+                stdout = pyo.runPython("sys.stdout.getvalue()");
+                stderr = pyo.runPython("sys.stderr.getvalue()");
+                
+                const lines = stdout.trim().split('\n').map(l => l.trim()).filter(l => l);
+                passed = lines.includes("SUCCESS");
+            }
             
-            const actualLines = stdout.trim().split('\n').map(l => l.trim()).filter(l => l);
-            const passed = JSON.stringify(actualLines) === JSON.stringify(expectedLines);
+            if (submitBtn) submitBtn.disabled = false;
             
             if (passed) {
                 // 合格処理 ➔ 直接クラウドデータを書き換えてチケット復旧
@@ -1546,7 +1632,7 @@ function judgeTrainingCode() {
                 if (!updatedData.history) updatedData.history = [];
                 updatedData.history.push({
                     "date": getTodayString(),
-                    "event": "Training Passed: Python FizzBuzz Execution (Auto Judged)",
+                    "event": `Training Passed: ${activeTest.param} Ticket Recovery Mission (Auto Judged)`,
                     "status_change": {}
                 });
                 
@@ -1554,12 +1640,12 @@ function judgeTrainingCode() {
                 saveStatusDataToFirestore(updatedData)
                 .then(() => {
                     document.querySelector('#test-complete-view .complete-icon').innerText = "🎉";
-                    document.querySelector('#test-complete-view .complete-title').innerText = "追試ミッション合格！";
+                    document.querySelector('#test-complete-view .complete-title').innerText = "追死ミッション合格！";
                     document.querySelector('#test-complete-view .complete-desc').innerText = "テスト判定をパスしました！";
                     
                     const descSubs = document.querySelectorAll('#test-complete-view .complete-desc-sub');
                     if (descSubs.length >= 3) {
-                        descSubs[0].innerText = "📋 おめでとうございます！コードの出力が期待されるFizzBuzzと完全に一致しました。";
+                        descSubs[0].innerText = "📋 おめでとうございます！コードがすべてのテストケースを正常にパスしました。";
                         descSubs[0].style.color = "var(--hp-green)";
                         descSubs[1].style.display = "block";
                         descSubs[1].innerText = "測定チケット（all）が1枚回復しました！ステータス画面で確認してください。";
@@ -1577,9 +1663,15 @@ function judgeTrainingCode() {
                 resultBody.style.color = "#ff6b81";
                 if (submitBtn) submitBtn.innerText = "コードを実行してテスト判定";
                 
-                let diffText = "【出力結果の不一致】\n期待される出力と実際の出力が一致しません。\n\n";
-                diffText += `[期待される出力 (1～30のFizzBuzz)]\n${expectedLines.slice(0, 5).join('\n')}...\n\n`;
-                diffText += `[実際の出力]\n${stdout.substring(0, 200) || '(出力なし)'}\n`;
+                let diffText = "";
+                if (activeTest.id === "TRAIN-DEV-01") {
+                    diffText = "【出力結果の不一致】\n期待される出力と実際の出力が一致しません。\n\n";
+                    diffText += `[期待される出力 (1～30のFizzBuzz)]\n${expectedLines.slice(0, 5).join('\n')}...\n\n`;
+                    diffText += `[実際の出力]\n${stdout.substring(0, 200) || '(出力なし)'}\n`;
+                } else {
+                    diffText = "【テストケース不合格】\n定義された関数のテストで失敗が検出されました。\n\n";
+                    diffText += `[テスト実行結果]\n${stdout || '(出力なし)'}\n`;
+                }
                 if (stderr) {
                     diffText += `\n[エラー出力]\n${stderr}\n`;
                 }
