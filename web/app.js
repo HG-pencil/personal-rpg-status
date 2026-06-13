@@ -31,17 +31,19 @@ firebase.auth().onAuthStateChanged(user => {
         if (loggedInUserInfo) loggedInUserInfo.style.display = 'flex';
         if (userEmailDisplay) userEmailDisplay.innerText = user.email;
         
-        // ステータスデータのロード
-        fetchStatusData();
+        // 新規ユーザー時のドキュメント自動生成チェック
+        initializeUserDocumentIfNotExist(user.uid).then(() => {
+            // ステータスデータのロード
+            fetchStatusData();
+        });
     } else {
         // 未ログイン状態
         currentUserId = '';
         if (authModal) authModal.style.display = 'flex';
         if (loggedInUserInfo) loggedInUserInfo.style.display = 'none';
         
-        // ログインフォームの入力欄にフォーカス
-        const emailInput = document.getElementById('login-email');
-        if (emailInput) emailInput.focus();
+        // ログイン状態でないときは常にログインビューを表示するようにリセット
+        toggleAuthView(false);
     }
 });
 
@@ -188,6 +190,160 @@ function escapeHtml(str) {
         "'": '&#39;',
         '"': '&quot;'
     }[tag] || tag));
+}
+// ログイン・新規登録画面の切り替え
+function toggleAuthView(showSignup) {
+    const loginView = document.getElementById('auth-login-view');
+    const signupView = document.getElementById('auth-signup-view');
+    const errorMsgEl = document.getElementById('auth-error-msg');
+    
+    if (errorMsgEl) errorMsgEl.style.display = 'none';
+    
+    if (showSignup) {
+        if (loginView) loginView.style.display = 'none';
+        if (signupView) signupView.style.display = 'block';
+        const signupEmail = document.getElementById('signup-email');
+        if (signupEmail) signupEmail.focus();
+    } else {
+        if (loginView) loginView.style.display = 'block';
+        if (signupView) signupView.style.display = 'none';
+        const loginEmail = document.getElementById('login-email');
+        if (loginEmail) loginEmail.focus();
+    }
+}
+
+// 新規アカウント作成（サインアップ）処理
+function registerUser() {
+    const emailInput = document.getElementById('signup-email');
+    const passwordInput = document.getElementById('signup-password');
+    const confirmPasswordInput = document.getElementById('signup-confirm-password');
+    const errorMsgEl = document.getElementById('auth-error-msg');
+    
+    if (!emailInput || !passwordInput || !confirmPasswordInput) return;
+    
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
+    
+    if (!email || !password || !confirmPassword) {
+        if (errorMsgEl) {
+            errorMsgEl.innerText = "すべてのフィールドを入力してください。";
+            errorMsgEl.style.display = "block";
+        }
+        return;
+    }
+    
+    if (password !== confirmPassword) {
+        if (errorMsgEl) {
+            errorMsgEl.innerText = "パスワードと確認用パスワードが一致しません。";
+            errorMsgEl.style.display = "block";
+        }
+        return;
+    }
+    
+    if (password.length < 6) {
+        if (errorMsgEl) {
+            errorMsgEl.innerText = "パスワードは6文字以上で指定してください。";
+            errorMsgEl.style.display = "block";
+        }
+        return;
+    }
+    
+    if (errorMsgEl) errorMsgEl.style.display = "none";
+    
+    const registerBtn = document.querySelector('#auth-signup-view .btn-primary');
+    const originalText = registerBtn ? registerBtn.innerText : "REGISTER";
+    if (registerBtn) {
+        registerBtn.disabled = true;
+        registerBtn.innerText = "CREATING...";
+    }
+    
+    firebase.auth().createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            if (registerBtn) {
+                registerBtn.disabled = false;
+                registerBtn.innerText = originalText;
+            }
+        })
+        .catch(error => {
+            console.error("Registration failed:", error);
+            if (registerBtn) {
+                registerBtn.disabled = false;
+                registerBtn.innerText = originalText;
+            }
+            if (errorMsgEl) {
+                let message = "アカウントの作成に失敗しました。";
+                if (error.code === 'auth/email-already-in-use') {
+                    message = "このメールアドレスは既に登録されています。";
+                } else if (error.code === 'auth/invalid-email') {
+                    message = "メールアドレスの形式が正しくありません。";
+                } else if (error.code === 'auth/weak-password') {
+                    message = "パスワードが弱すぎます。6文字以上必要です。";
+                } else {
+                    message = error.message;
+                }
+                errorMsgEl.innerText = message;
+                errorMsgEl.style.display = "block";
+            }
+        });
+}
+
+// 新規ユーザー用の初期ドキュメント生成処理
+function initializeUserDocumentIfNotExist(uid) {
+    const docRef = db.collection('users').doc(uid);
+    return docRef.get().then(doc => {
+        if (doc.exists) {
+            return; // すでに存在する場合は何もしない
+        }
+        
+        // 新規ユーザーの初期データテンプレート（ノービス）
+        const initialData = {
+            "build_score": "Novice Adventurer",
+            "combat_power": 700,
+            "last_updated": new Date().toISOString(),
+            "status": {
+                "HP": {"current": 100, "max": 100},
+                "STR": {"current": 100, "peak": 100},
+                "VIT": {"current": 100, "peak": 100},
+                "INT": {"current": 100, "peak": 100},
+                "WIS": {"current": 100, "peak": 100},
+                "MND": {"current": 100, "peak": 100},
+                "CHA": {"current": 100, "peak": 100},
+                "DEV": {"current": 100, "peak": 100}
+            },
+            "training": {
+                "STR": 0, "VIT": 0, "INT": 0, "WIS": 0, "MND": 0, "CHA": 0, "DEV": 0
+            },
+            "tickets": {
+                "all": 0, "STR": 0, "VIT": 0, "INT": 0, "WIS": 0, "MND": 0, "CHA": 0, "DEV": 0
+            },
+            "titles": {
+                "active": ["目覚めし人"],
+                "list": ["目覚めし人"]
+            },
+            "active_title_parts": ["目覚めし人"],
+            "title_parts": ["目覚めし人", "の"],
+            "unlocked_achievements": ["ACH_FIRST_STEP"],
+            "archetypes": ["Adventurer"],
+            "active_archetype": "Novice",
+            "history": [
+                {
+                    "date": getTodayString(),
+                    "event": "Character Created: Adventurer Registration Completed",
+                    "status_change": {}
+                }
+            ],
+            "pending_answers": []
+        };
+        
+        return docRef.set({
+            status_json: JSON.stringify(initialData)
+        }).then(() => {
+            console.log("Successfully initialized new user document in Firestore for UID:", uid);
+        });
+    }).catch(err => {
+        console.error("Error checking/initializing user document:", err);
+    });
 }
 
 
