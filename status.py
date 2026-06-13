@@ -1210,9 +1210,67 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         if not date:
             continue
 
+        is_override = False
+        old_points = {}
+        target_history_idx = -1
+        
         if date in reflected_dates:
-            results.append(f"スキップ (重複): {date}")
-            continue
+            # 過去の履歴からこの日付のインポート実績を探す
+            for idx, h in enumerate(history):
+                if h.get("event", "").startswith(f"Training Reflected: {date}"):
+                    old_points = h.get("status_change", {})
+                    target_history_idx = idx
+                    is_override = True
+                    break
+            
+            if is_override:
+                # 差分マージ処理
+                added_points = {}
+                daily_points = 0
+                has_diff = False
+                
+                for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]:
+                    new_val = int(points.get(p, 0))
+                    old_val = int(old_points.get(p, 0))
+                    diff = new_val - old_val
+                    if diff != 0:
+                        has_diff = True
+                        training[p] += diff
+                        added_points[p] = diff
+                        daily_points += diff
+                
+                if not has_diff:
+                    # 全く同じデータ ➔ スキップ
+                    results.append(f"スキップ (重複・変更なし): {date}")
+                    continue
+                else:
+                    # 差分がある ➔ 上書き更新
+                    history[target_history_idx]["status_change"] = {p: int(points.get(p, 0)) for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"] if int(points.get(p, 0)) > 0}
+                    history[target_history_idx]["summary"] = summary
+                    
+                    pts_str = ", ".join([f"{k}+{v}" for k, v in points.items() if int(v) > 0])
+                    history[target_history_idx]["event"] = f"Training Reflected: {date} ({pts_str})"
+                    
+                    # HP回復補正計算 (VIT / MND の加算量変化に基づいて補正)
+                    old_vit = int(old_points.get("VIT", 0))
+                    old_mnd = int(old_points.get("MND", 0))
+                    new_vit = int(points.get("VIT", 0))
+                    new_mnd = int(points.get("MND", 0))
+                    
+                    old_hp_to_recover = int((old_vit + old_mnd) * 0.5)
+                    new_hp_to_recover = int((new_vit + new_mnd) * 0.5)
+                    hp_diff = new_hp_to_recover - old_hp_to_recover
+                    
+                    if hp_diff != 0:
+                        old_hp = hp["current"]
+                        hp["current"] = min(hp["max"], max(0, hp["current"] + hp_diff))
+                        hp_recovered_total += (hp["current"] - old_hp)
+                    
+                    new_points_total += daily_points
+                    
+                    diff_str = ", ".join([f"{k}{'+' if v > 0 else ''}{v}" for k, v in added_points.items() if v != 0])
+                    results.append(f"上書き更新成功: {date} (差分: {diff_str}) - {summary}")
+                    continue
 
         # 反映処理
         daily_points = 0
