@@ -1217,7 +1217,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
         if date in reflected_dates:
             # 過去の履歴からこの日付のインポート実績を探す
             for idx, h in enumerate(history):
-                if h.get("event", "").startswith(f"Training Reflected: {date}"):
+                if h.get("event", "").startswith(f"Training Reflected: {date} "):
                     old_points = h.get("status_change", {})
                     target_history_idx = idx
                     is_override = True
