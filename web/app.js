@@ -788,14 +788,25 @@ function updateUI(data) {
     document.getElementById('active-title').innerText = titles.active.length > 0 ? titles.active.join(', ') : '(None)';
     document.getElementById('archetype-value').innerText = activeArchetype;
 
-    // アバター画像の切り替え
+    // アバター画像の切り替え (カスタム称号がある場合は character.png を優先、なければ職業アバターを優先)
     const avatarImg = document.getElementById('char-avatar');
     if (avatarImg) {
-        avatarImg.src = `assets/avatar_${activeArchetype}.png`;
-        avatarImg.onerror = function() {
-            avatarImg.src = 'assets/character.png';
-            avatarImg.onerror = null; // ループ防止
-        };
+        const cacheBuster = data.last_updated ? `?v=${new Date(data.last_updated).getTime()}` : `?v=${new Date().getTime()}`;
+        const hasCustomTitle = data.custom_title && data.custom_title.trim() !== "";
+        
+        if (hasCustomTitle) {
+            avatarImg.src = `assets/character.png${cacheBuster}`;
+            avatarImg.onerror = function() {
+                avatarImg.src = `assets/avatar_${activeArchetype}.png${cacheBuster}`;
+                avatarImg.onerror = null; // ループ防止
+            };
+        } else {
+            avatarImg.src = `assets/avatar_${activeArchetype}.png${cacheBuster}`;
+            avatarImg.onerror = function() {
+                avatarImg.src = `assets/character.png${cacheBuster}`;
+                avatarImg.onerror = null; // ループ防止
+            };
+        }
     }
     
     // 日時フォーマット
