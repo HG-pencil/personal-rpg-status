@@ -520,6 +520,11 @@ def mask_sensitive_data(data):
         for ans in c["pending_answers"]:
             test_id = ans.get("test_id", "")
             if "answer" in ans and test_id and not test_id.startswith("TRAIN-"):
+                val = ans["answer"]
+                if isinstance(val, dict) and "key_version" in val:
+                    continue
+                if isinstance(val, str) and (val.strip().startswith("{") and "key_version" in val):
+                    continue
                 ans["answer"] = "[記述回答はローカルにのみ保存されています]"
                 
     return c
@@ -725,9 +730,96 @@ def migrate_data(data):
                 
     return data
 
+KEY_CACHE = {}
+
+def get_private_key(version):
+    """指定されたバージョンの秘密鍵を取得（キャッシュから、なければロード）"""
+    if version in KEY_CACHE:
+        return KEY_CACHE[version]
+        
+    base_path = get_base_path()
+    key_filename = f"private_key_{version}.pem"
+    key_paths = [
+        os.path.join(base_path, key_filename),
+        key_filename
+    ]
+    
+    for kp in key_paths:
+        if os.path.exists(kp):
+            try:
+                from cryptography.hazmat.primitives import serialization
+                with open(kp, "rb") as f:
+                    private_key = serialization.load_pem_private_key(f.read(), password=None)
+                    KEY_CACHE[version] = private_key
+                    return private_key
+            except Exception as e:
+                print(f"[!] 秘密鍵 {kp} の読み込みに失敗しました: {e}")
+                
+    return None
+
+def decrypt_answer(payload):
+    """暗号化された回答データを復号する。"""
+    key_version = payload.get("key_version")
+    if not key_version:
+        raise ValueError("key_version が指定されていません")
+        
+    private_key = get_private_key(key_version)
+    if not private_key:
+        raise FileNotFoundError(f"バージョン {key_version} に対応する秘密鍵が見つかりません")
+        
+    import base64
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    
+    encrypted_key = base64.b64decode(payload["encrypted_key"])
+    aes_key = private_key.decrypt(
+        encrypted_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    
+    iv = base64.b64decode(payload["iv"])
+    full_ciphertext = base64.b64decode(payload["ciphertext"])
+    
+    aesgcm = AESGCM(aes_key)
+    plaintext_bytes = aesgcm.decrypt(iv, full_ciphertext, None)
+    return plaintext_bytes.decode('utf-8')
+
+def init_crypto_keys():
+    """起動時に秘密鍵 v1 をチェック・ロードする"""
+    v1_key = get_private_key("v1")
+    if not v1_key:
+        raise RuntimeError("秘密鍵 private_key_v1.pem が見つかりません。起動を停止します。")
+    print("[OK] RSA private key loaded (version: v1)")
+
 def load_status(filepath, user_id="HG_pencil"):
     # まずクラウドからのプルを試みる
     cloud_data = pull_from_firestore(user_id)
+    
+    # 記述回答の復号処理
+    if cloud_data and "pending_answers" in cloud_data:
+        for ans in cloud_data["pending_answers"]:
+            answer_val = ans.get("answer")
+            if answer_val:
+                # 文字列で JSON の場合はパースを試みる
+                if isinstance(answer_val, str) and (answer_val.strip().startswith("{") or "key_version" in answer_val):
+                    try:
+                        answer_val = json.loads(answer_val)
+                    except Exception:
+                        pass
+                
+                # 暗号化データ構造の場合
+                if isinstance(answer_val, dict) and "key_version" in answer_val:
+                    try:
+                        decrypted_text = decrypt_answer(answer_val)
+                        ans["answer"] = decrypted_text
+                    except Exception as e:
+                        print(f"[!] 回答の復号に失敗しました: {e}")
+                        ans["answer"] = "[採点エラー: 復号不可]"
     
     # テキストファイルから目標・ロードマップをパース
     quests = parse_monthly_goals(user_id)
@@ -1650,6 +1742,13 @@ def launch_web_server(base_path):
         print(f"サーバーのバックグラウンド起動に失敗しました: {e}")
 
 def main():
+    # 秘密鍵のロード・検証
+    try:
+        init_crypto_keys()
+    except Exception as e:
+        print(f"[🚨 起動エラー] {e}")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="Antigravity Status CLI Visualizer")
     parser.add_argument("--image", "-i", action="store_true", help="ドット絵キャラクター画像を表示します")
     parser.add_argument("--radar", "-r", action="store_true", help="レーダーチャート(グラフ)を表示します")

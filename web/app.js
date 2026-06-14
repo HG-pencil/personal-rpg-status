@@ -1400,14 +1400,112 @@ function updateTimerUI() {
     }
 }
 
+// 公開鍵をロードして暗号化を行う非同期関数
+async function encryptAnswer(plainText, keyVersion = "v1") {
+    // 1. 公開鍵 (JWK) をロード
+    const pubKeyResponse = await fetch(`public_key_${keyVersion}.json`);
+    if (!pubKeyResponse.ok) {
+        throw new Error(`公開鍵 (version: ${keyVersion}) のロードに失敗しました`);
+    }
+    const jwkKey = await pubKeyResponse.json();
+
+    // 2. RSA-OAEP 公開鍵のインポート (SHA-256 指定)
+    const pubKey = await window.crypto.subtle.importKey(
+        "jwk",
+        jwkKey,
+        {
+            name: "RSA-OAEP",
+            hash: { name: "SHA-256" } // 3072bit に合わせた SHA-256 指定
+        },
+        false,
+        ["encrypt"]
+    );
+
+    // 3. AES-GCM 共通鍵 (256ビット) の一時生成
+    const aesKey = await window.crypto.subtle.generateKey(
+        {
+            name: "AES-GCM",
+            length: 256 // 256bit 鍵長に固定
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+
+    // 4. AES鍵を raw (32バイト) でエクスポート
+    const rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
+
+    // 5. エクスポートした AES 共通鍵を RSA-OAEP (SHA-256) で暗号化
+    const encryptedKeyBuf = await window.crypto.subtle.encrypt(
+        { name: "RSA-OAEP" },
+        pubKey,
+        rawAesKey
+    );
+
+    // 6. IV の生成 (12バイト)
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+    // 7. 本文の暗号化
+    const encoder = new TextEncoder();
+    const plainBytes = encoder.encode(plainText);
+    const ciphertextBuf = await window.crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: iv
+        },
+        aesKey,
+        plainBytes
+    );
+
+    // ArrayBuffer を Base64 形式に変換するヘルパー
+    const arrayBufferToBase64 = (buf) => {
+        const bytes = new Uint8Array(buf);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    };
+
+    return {
+        key_version: keyVersion,
+        encrypted_key: arrayBufferToBase64(encryptedKeyBuf),
+        iv: arrayBufferToBase64(iv),
+        ciphertext: arrayBufferToBase64(ciphertextBuf)
+    };
+}
+
 // 通常の試験提出 (Firestoreへの書き込み)
-function submitTestAnswer(isTimeout = false) {
+async function submitTestAnswer(isTimeout = false) {
     if (testTimerInterval) clearInterval(testTimerInterval);
     
     const textarea = document.getElementById('test-answer-input');
+    const submitBtn = document.getElementById('test-submit-btn');
+    
+    // UIを即座に無効化（連打防止）
     if (textarea) textarea.disabled = true;
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = "暗号化中...";
+    }
     
     const answerText = textarea ? textarea.value : '';
+    
+    // 回答の暗号化を実行
+    let encryptedAnswer = null;
+    try {
+        encryptedAnswer = await encryptAnswer(answerText, "v1");
+    } catch (e) {
+        console.error("暗号化エラー:", e);
+        alert("解答の暗号化処理に失敗しました。提出を中断します。エラー: " + e.message);
+        if (textarea) textarea.disabled = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "解答を提出する";
+        }
+        return;
+    }
+    
+    if (submitBtn) submitBtn.innerText = "提出中...";
     
     // 現在のキャッシュデータをコピーして書き換え
     const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
@@ -1444,7 +1542,7 @@ function submitTestAnswer(isTimeout = false) {
         "param": activeTest.param,
         "target_gate": activeTest.target_gate,
         "test_type": activeTest.test_type || "gate",
-        "answer": answerText,
+        "answer": encryptedAnswer,
         "elapsed_seconds": elapsed,
         "timeout": isTimeout,
         "submitted_at": new Date().toISOString()
@@ -1492,6 +1590,10 @@ function submitTestAnswer(isTimeout = false) {
         console.error("提出エラー:", err);
         alert("解答の送信に失敗しました。クラウドデータベースの接続状態を確認してください。");
         if (textarea) textarea.disabled = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "解答を提出する";
+        }
     });
 }
 

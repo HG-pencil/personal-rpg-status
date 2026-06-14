@@ -15,3 +15,4 @@ pending_answers_*.json
 .DS_Store
 Thumbs.db
 config_auth.json
+private_key_*.pem
