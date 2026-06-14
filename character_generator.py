@@ -62,10 +62,10 @@ def main():
     elif active_titles:
         title_suffix = f" representing the title '{active_titles[0]}'"
         
-    # 最終的なプロンプトの構築（必ずノービス画像 'assets/avatar_Novice.png' をベースにし、顔立ちを維持する指示を埋め込む）
+    # 最終的なプロンプトの構築（ノービス画像をベースに顔立ちを維持しつつ、アングルやポーズは動的に変化させる）
     prompt = (
         f"Based on the input image 'assets/avatar_Novice.png', keep the exact same character (the same facial features, the friendly closed-eye smile, and the head shape of the middle-aged uncle with short dark hair and no beard). "
-        f"Change only his outfit: dress him in {gear_desc}, {style_details}{title_suffix}. "
+        f"Modify his outfit, pose, and camera angle dynamically: dress him in {gear_desc}, {style_details}{title_suffix}, creating an active and exciting pose suitable for this title. "
         f"Maintain the exact 16-bit retro game pixel art style, sprite layout, and solid dark gray background."
     )
     
