@@ -50,10 +50,33 @@ firebase.auth().onAuthStateChanged(user => {
         if (loggedInUserInfo) loggedInUserInfo.style.display = 'flex';
         if (userEmailDisplay) userEmailDisplay.innerText = user.email;
         
-        // 新規ユーザー時のドキュメント自動生成チェック
-        initializeUserDocumentIfNotExist(user.uid).then(() => {
-            // ステータスデータのロード
-            fetchStatusData();
+        // 【SWRパターン】ローカルストレージからキャッシュされたステータスを即座に仮表示（遅延0秒化）
+        const cachedStr = safeGetItem('rpg_status_cache', '');
+        if (cachedStr) {
+            try {
+                const cachedData = JSON.parse(cachedStr);
+                // キャッシュのUIDが一致している場合のみ仮表示
+                if (cachedData.uid === user.uid || !cachedData.uid) {
+                    console.log("[SWR] キャッシュデータから即時仮描画します。");
+                    cachedStatusData = cachedData;
+                    originalBaseData = JSON.parse(JSON.stringify(cachedData));
+                    updateUI(cachedData);
+                    initRadarChart(cachedData);
+                }
+            } catch (e) {
+                console.warn("[SWR] キャッシュデータのパースに失敗しました:", e);
+            }
+        }
+        
+        // 直接Firestoreからデータをフェッチ（1往復）
+        fetchStatusData().then(data => {
+            if (!data) {
+                // フェッチ失敗、または新規ユーザーでドキュメントが存在しない場合に初期化を行う（フォールバック）
+                console.log("データが取得できなかったため、新規ドキュメント初期化を確認します。");
+                initializeUserDocumentIfNotExist(user.uid).then(() => {
+                    fetchStatusData();
+                });
+            }
         });
     } else {
         // 未ログイン状態
@@ -576,8 +599,11 @@ function saveStatusDataToFirestore(updatedData, isFast = false) {
             status_json: JSON.stringify(maskedData)
         }).then(() => {
             console.log("[Fast Path] Firestoreへの同期成功。New Revision:", finalData.revision);
+            finalData.uid = currentUserId; // ユーザー識別子を付与
             cachedStatusData = finalData;
             originalBaseData = JSON.parse(JSON.stringify(finalData));
+            // ローカルキャッシュも更新
+            safeSetItem('rpg_status_cache', JSON.stringify(finalData));
             updateUI(finalData);
             initRadarChart(finalData);
             return finalData;
@@ -620,9 +646,12 @@ function saveStatusDataToFirestore(updatedData, isFast = false) {
                 status_json: JSON.stringify(maskedData)
             }).then(() => {
                 console.log("Firestoreへの同期成功。New Revision:", finalData.revision);
+                finalData.uid = currentUserId; // ユーザー識別子を付与
                 // ローカルのキャッシュとベースラインにはマスキング前のデータを保持
                 cachedStatusData = finalData;
                 originalBaseData = JSON.parse(JSON.stringify(finalData));
+                // ローカルキャッシュも更新
+                safeSetItem('rpg_status_cache', JSON.stringify(finalData));
                 updateUI(finalData);
                 initRadarChart(finalData);
                 return finalData;
@@ -635,12 +664,19 @@ function fetchStatusData() {
     return userDocRef.get()
         .then(doc => {
             if (!doc.exists) {
-                throw new Error('クラウド上にデータが見つかりませんでした');
+                console.warn('クラウド上にデータが見つかりませんでした (新規登録ユーザーの可能性)');
+                return null;
             }
             let data = JSON.parse(doc.data().status_json);
             data = migrateStatusData(data); // クライアントサイド・マイグレーションの実行
+            data.uid = currentUserId; // ユーザー識別子を付与
+            
             cachedStatusData = data; // キャッシュに保持
             originalBaseData = JSON.parse(JSON.stringify(data)); // ベースラインの保存
+            
+            // ローカルキャッシュに保存
+            safeSetItem('rpg_status_cache', JSON.stringify(data));
+            
             updateUI(data);
             initRadarChart(data);
             // 公開鍵をバックグラウンドで事前ロードしてキャッシュ
@@ -650,6 +686,7 @@ function fetchStatusData() {
         .catch(error => {
             console.error('データのフェッチエラー:', error);
             document.getElementById('build-score').innerText = 'データ読み込み失敗';
+            return null;
         });
 }
 
