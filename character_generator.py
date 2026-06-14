@@ -62,13 +62,11 @@ def main():
     elif active_titles:
         title_suffix = f" representing the title '{active_titles[0]}'"
         
-    # 最終的なプロンプトの構築（2頭身アニメ調のおっさん要素を明示）
+    # 最終的なプロンプトの構築（必ずノービス画像 'assets/avatar_Novice.png' をベースにし、顔立ちを維持する指示を埋め込む）
     prompt = (
-        f"16-bit retro game pixel art sprite of a friendly chibi style (2-head-tall) middle-aged uncle adventurer. "
-        f"The character is an approachable middle-aged man with a short neat beard, "
-        f"equipped with {gear_desc}, {style_details}{title_suffix}. "
-        f"Full body portrait, isolated on a clean solid dark gray background. "
-        f"Vibrant colors, cute anime JRPG chibi character style, clear pixel lines."
+        f"Based on the input image 'assets/avatar_Novice.png', keep the exact same character (the same facial features, the friendly closed-eye smile, and the head shape of the middle-aged uncle with short dark hair and no beard). "
+        f"Change only his outfit: dress him in {gear_desc}, {style_details}{title_suffix}. "
+        f"Maintain the exact 16-bit retro game pixel art style, sprite layout, and solid dark gray background."
     )
     
     print("=== GENERATED IMAGE PROMPT ===")
