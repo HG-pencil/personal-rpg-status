@@ -358,7 +358,20 @@ function migrateStatusData(data) {
         data.unlocked_system_titles = [];
         modified = true;
     }
-    if (!data.available_system_titles || data.available_system_titles.length === 0) {
+    
+    let needTitleRepair = false;
+    if (data.available_system_titles && Array.isArray(data.available_system_titles)) {
+        for (const t of data.available_system_titles) {
+            if (!t || !t.desc || !t.condition || !t.reward_words || !Array.isArray(t.reward_words)) {
+                needTitleRepair = true;
+                break;
+            }
+        }
+    } else {
+        needTitleRepair = true;
+    }
+
+    if (needTitleRepair || !data.available_system_titles || data.available_system_titles.length === 0) {
         data.available_system_titles = [
             {
                 "id": "TITLE_SYS_AI_CYBER_JEDI",

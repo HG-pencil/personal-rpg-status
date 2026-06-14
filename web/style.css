@@ -1646,8 +1646,8 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 15px;
     margin-top: 10px;
-    max-height: 250px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
     padding-right: 5px;
 }
 
