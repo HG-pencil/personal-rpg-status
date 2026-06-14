@@ -353,6 +353,52 @@ function migrateStatusData(data) {
         modified = true;
     }
     
+    // システム称号関連の初期マイグレーション
+    if (!data.unlocked_system_titles) {
+        data.unlocked_system_titles = [];
+        modified = true;
+    }
+    if (!data.available_system_titles) {
+        data.available_system_titles = [
+            {
+                "id": "TITLE_SYS_AI_CYBER_JEDI",
+                "name": "極限の電脳ジェダイ",
+                "desc": "DEV（開発力）が240以上、かつMND（精神力）が350以上に到達する",
+                "condition": "DEV >= 240 and MND >= 350",
+                "reward_words": ["ジェダイ", "極限の", "フォース"]
+            },
+            {
+                "id": "TITLE_SYS_AI_SANCTUARY_KNIGHT",
+                "name": "聖域の鉄壁ナイト",
+                "desc": "VIT（持久）が250以上、かつMND（精神力）が350以上に到達する",
+                "condition": "VIT >= 250 and MND >= 350",
+                "reward_words": ["鉄壁", "聖域", "ナイト"]
+            },
+            {
+                "id": "TITLE_SYS_AI_CODE_SAGE",
+                "name": "コードを紡ぐ大賢者",
+                "desc": "DEV（開発力）が250以上、かつWIS（知恵）が400以上に到達する",
+                "condition": "DEV >= 250 and WIS >= 400",
+                "reward_words": ["コード", "賢者", "紡ぎ手"]
+            },
+            {
+                "id": "TITLE_SYS_AI_SOUL_LEADER",
+                "name": "魂のカリスマ指揮官",
+                "desc": "CHA（魅力）が320以上、かつMND（精神力）が350以上に到達する",
+                "condition": "CHA >= 320 and MND >= 350",
+                "reward_words": ["魂", "指揮官", "カリスマ"]
+            },
+            {
+                "id": "TITLE_SYS_AI_STR_WIS_HERO",
+                "name": "真理を穿つ剛力無双",
+                "desc": "STR（筋力）が350以上、かつWIS（知恵）が400以上に到達する",
+                "condition": "STR >= 350 and WIS >= 400",
+                "reward_words": ["剛力", "穿ちし", "真理"]
+            }
+        ];
+        modified = true;
+    }
+    
     // tickets.measurement から tickets.all への統合マイグレーション
     if (data.tickets) {
         if (data.tickets.measurement !== undefined) {
