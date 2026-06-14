@@ -74,6 +74,7 @@ let activeTest = null;
 let testTimerInterval = null;
 let testSecondsRemaining = 0;
 let testSecondsTotal = 0;
+let testStartTime = null;
 let pyodideInstance = null; // Pyodideインスタンス保持用
 
 // ヘルパー関数
@@ -1184,14 +1185,14 @@ function loadAvailableTests() {
                         const escapedId = escapeHtml(test.id);
                         const escapedTitle = escapeHtml(test.question.split('\n')[0].replace('【', '').replace('】', ''));
                         const escapedDiff = escapeHtml(test.difficulty);
-                        const escapedTime = escapeHtml(String(timeMin));
+                        const escapedTime = test.time_limit_seconds > 0 ? `${escapeHtml(String(timeMin))} 分` : "なし";
                         html += `
                             <div class="test-select-card" style="border-color: rgba(0, 210, 255, 0.25); margin-bottom: 10px;">
                                 <div class="test-card-left">
                                     <div class="test-card-title" style="color: var(--accent-blue);">【追試】${escapedTitle}</div>
                                     <div class="test-card-meta" style="margin-top: 4px;">
                                         <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${escapedDiff}</span></span>
-                                        <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
+                                        <span>制限時間: <span class="meta-time">${escapedTime}</span></span>
                                     </div>
                                 </div>
                                 <button class="btn btn-primary" onclick="startTest('${escapedId}', 'training')">ミッション開始</button>
@@ -1214,6 +1215,7 @@ function loadAvailableTests() {
                     const param = test.param;
                     const targetGate = test.target_gate;
                     const timeMin = test.time_limit_seconds / 60;
+                    const timeText = test.time_limit_seconds > 0 ? `${timeMin} 分` : "なし";
                     
                     const pData = status[param] || { current: 100 };
                     const currVal = pData.current;
@@ -1248,7 +1250,7 @@ function loadAvailableTests() {
                     const escapedParam = escapeHtml(param);
                     const escapedGate = escapeHtml(String(targetGate));
                     const escapedDiff = escapeHtml(test.difficulty);
-                    const escapedTime = escapeHtml(String(timeMin));
+                    const escapedTime = escapeHtml(timeText);
                     
                     html += `
                         <div class="test-select-card" style="${btnDisabled ? 'opacity: 0.6; border-color: rgba(255,255,255,0.02);' : ''}">
@@ -1256,7 +1258,7 @@ function loadAvailableTests() {
                                 <div class="test-card-title">${escapedParam} -> ${escapedGate} ゲート試験</div>
                                 <div class="test-card-meta">
                                     <span>難易度: <span class="meta-diff">${escapedDiff}</span></span>
-                                    <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
+                                    <span>制限時間: <span class="meta-time">${escapedTime}</span></span>
                                     <span>状態: ${ticketStatusHtml}</span>
                                 </div>
                                 ${warningText}
@@ -1280,12 +1282,13 @@ function loadAvailableTests() {
                     const param = test.param;
                     const targetGate = test.target_gate;
                     const timeMin = test.time_limit_seconds / 60;
+                    const timeText = test.time_limit_seconds > 0 ? `${timeMin} 分` : "なし";
                     
                     const escapedId = escapeHtml(test.id);
                     const escapedParam = escapeHtml(param);
                     const escapedGate = escapeHtml(String(targetGate));
                     const escapedDiff = escapeHtml(test.difficulty);
-                    const escapedTime = escapeHtml(String(timeMin));
+                    const escapedTime = escapeHtml(timeText);
                     
                     html += `
                         <div class="test-select-card">
@@ -1293,7 +1296,7 @@ function loadAvailableTests() {
                                 <div class="test-card-title">${escapedParam} -> ${escapedGate} レベル測定</div>
                                 <div class="test-card-meta">
                                     <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${escapedDiff}</span></span>
-                                    <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
+                                    <span>制限時間: <span class="meta-time">${escapedTime}</span></span>
                                     <span>状態: <span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能 (フリー)</span></span>
                                 </div>
                             </div>
@@ -1357,8 +1360,9 @@ function startTest(testId, testType) {
             }
             
             activeTest = { ...test, test_type: isMeasurement ? 'measurement' : 'gate' };
-            testSecondsTotal = test.time_limit_seconds;
+            testSecondsTotal = test.time_limit_seconds || 0;
             testSecondsRemaining = testSecondsTotal;
+            testStartTime = Date.now();
             
             // UI表示の切り替え
             switchTestView('test-active-view');
@@ -1400,9 +1404,12 @@ function startTest(testId, testType) {
             // タイマーUI初期設定
             updateTimerUI();
             
-            // タイマーのカウントダウン開始 (1秒ごと)
+            // タイマーのカウントダウン開始 (1秒ごと、制限時間がある場合のみ)
             if (testTimerInterval) clearInterval(testTimerInterval);
-            testTimerInterval = setInterval(countdownTick, 1000);
+            if (testSecondsTotal > 0) {
+                testTimerInterval = setInterval(countdownTick, 1000);
+            }
+
         });
 }
 
@@ -1426,6 +1433,15 @@ function updateTimerUI() {
     const bar = document.getElementById('timer-progress');
     if (!clock || !bar) return;
     
+    // 制限時間なしの場合の表示
+    if (testSecondsTotal <= 0) {
+        clock.innerText = "制限時間なし";
+        bar.style.width = "100%";
+        clock.classList.remove('critical');
+        bar.classList.remove('critical');
+        return;
+    }
+    
     // 分・秒のフォーマット
     const mins = Math.floor(Math.max(0, testSecondsRemaining) / 60);
     const secs = Math.max(0, testSecondsRemaining) % 60;
@@ -1446,6 +1462,7 @@ function updateTimerUI() {
         bar.classList.remove('critical');
     }
 }
+
 
 let cachedPublicKey = null;
 let cachedPublicKeyVersion = null;
@@ -1593,7 +1610,7 @@ async function submitTestAnswer(isTimeout = false) {
         }
     }
     
-    const elapsed = testSecondsTotal - testSecondsRemaining;
+    const elapsed = testStartTime ? Math.floor((Date.now() - testStartTime) / 1000) : 0;
     const elapsedMin = roundNumber(elapsed / 60, 1);
     const statusStr = isTimeout ? "TIMEOUT" : "COMPLETED";
     
@@ -1690,7 +1707,7 @@ function abandonTest() {
         }
     }
     
-    const elapsed = testSecondsTotal - testSecondsRemaining;
+    const elapsed = testStartTime ? Math.floor((Date.now() - testStartTime) / 1000) : 0;
     const elapsedMin = roundNumber(elapsed / 60, 1);
     
     // 履歴追加
