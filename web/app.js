@@ -1152,51 +1152,55 @@ function loadAvailableTests() {
                     testsByParam[param] = [];
                 }
                 testsByParam[param].push(test);
-                
-                // ゲート試験（次のゲートに該当するもの）
-                const targetGate = test.target_gate;
-                const pData = status[param] || { current: 100 };
-                const currVal = pData.current;
-                if (getNextGate(currVal) === targetGate) {
-                    const gateTest = { ...test, test_type: 'gate' };
-                    gateTests.push(gateTest);
-                }
             });
             
-            // 各パラメータごとに、現在値に最も適した実力測定試験を1件のみ選出する
+            // 各パラメータごとに、現在値に最も適したゲート試験と実力測定試験を1件ずつランダム選出する
             Object.keys(testsByParam).forEach(param => {
                 const paramTests = testsByParam[param];
                 const pData = status[param] || { current: 100 };
                 const currVal = pData.current;
                 
+                // === ゲート試験の選出（次のゲートに一致する問題群からランダムに1つ） ===
+                const nextGate = getNextGate(currVal);
+                const eligibleGateTests = paramTests.filter(t => t.target_gate === nextGate);
+                if (eligibleGateTests.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * eligibleGateTests.length);
+                    const gateTest = { ...eligibleGateTests[randomIndex], test_type: 'gate' };
+                    gateTests.push(gateTest);
+                }
+                
+                // === 実力測定試験の選出 ===
                 // 理想のターゲットゲート（現在値が属する100刻みのランク帯。例: 200〜299なら200）
                 const idealGate = Math.floor(currVal / 100) * 100;
                 
-                let bestTest = null;
+                let bestTests = [];
                 
                 // 1. 現在のランク帯（idealGate）に完全一致する試験を探す
-                bestTest = paramTests.find(t => t.target_gate === idealGate);
+                bestTests = paramTests.filter(t => t.target_gate === idealGate);
                 
-                if (!bestTest) {
+                if (bestTests.length === 0) {
                     // 2. なければ、現在値より上のゲートの中で最も低い（次に目指すべき）試験を探す
-                    const higherTests = paramTests.filter(t => t.target_gate > currVal)
-                                                  .sort((a, b) => a.target_gate - b.target_gate);
-                    if (higherTests.length > 0) {
-                        bestTest = higherTests[0];
+                    const sortedHigher = paramTests.filter(t => t.target_gate > currVal)
+                                                    .sort((a, b) => a.target_gate - b.target_gate);
+                    if (sortedHigher.length > 0) {
+                        const targetHigherGate = sortedHigher[0].target_gate;
+                        bestTests = paramTests.filter(t => t.target_gate === targetHigherGate);
                     }
                 }
                 
-                if (!bestTest) {
+                if (bestTests.length === 0) {
                     // 3. それもなければ、現在値以下のゲートの中で最大のものを探す（すでにクリア済みの最大難易度）
-                    const lowerTests = paramTests.filter(t => t.target_gate <= currVal)
-                                                 .sort((a, b) => b.target_gate - a.target_gate);
-                    if (lowerTests.length > 0) {
-                        bestTest = lowerTests[0];
+                    const sortedLower = paramTests.filter(t => t.target_gate <= currVal)
+                                                   .sort((a, b) => b.target_gate - a.target_gate);
+                    if (sortedLower.length > 0) {
+                        const targetLowerGate = sortedLower[0].target_gate;
+                        bestTests = paramTests.filter(t => t.target_gate === targetLowerGate);
                     }
                 }
                 
-                if (bestTest) {
-                    const measurementTest = { ...bestTest, test_type: 'measurement' };
+                if (bestTests.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * bestTests.length);
+                    const measurementTest = { ...bestTests[randomIndex], test_type: 'measurement' };
                     measurementTests.push(measurementTest);
                 }
             });
