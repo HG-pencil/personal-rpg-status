@@ -2099,6 +2099,7 @@ function switchTab(tabId) {
     
     const activeBtn = Array.from(buttons).find(btn => 
         (tabId === 'status-tab' && btn.innerText.includes('能力ステータス')) ||
+        (tabId === 'achievement-tab' && btn.innerText.includes('実績')) ||
         (tabId === 'quest-tab' && btn.innerText.includes('今月のクエスト')) ||
         (tabId === 'items-tab' && btn.innerText.includes('アイテム')) ||
         (tabId === 'chart-tab' && btn.innerText.includes('レーダーチャート')) ||
@@ -2118,6 +2119,8 @@ function switchTab(tabId) {
         loadAvailableTests();
     } else if (tabId === 'quest-tab') {
         renderQuests(cachedStatusData);
+    } else if (tabId === 'achievement-tab') {
+        renderAchievementsOnly();
     }
 }
 
@@ -2149,13 +2152,10 @@ function closeAchievementModal() {
     }
 }
 
-function renderAchievementsAndWords() {
+function renderAchievementsOnly() {
     if (!cachedStatusData) return;
-    
     const unlocked = cachedStatusData.unlocked_achievements || [];
-    const ownedWords = cachedStatusData.title_parts || [];
     
-    // 1. アチーブメント（実績）の描画
     fetch('status_achievements.json')
         .then(res => {
             if (!res.ok) throw new Error('実績データの取得失敗');
@@ -2169,7 +2169,7 @@ function renderAchievementsAndWords() {
                 achievements.forEach(ach => {
                     const isUnlocked = unlocked.includes(ach.id);
                     const icon = isUnlocked ? "🥇" : "🔒";
-                    const cardClass = isUnlocked ? "badge-card unlocked" : "badge-card";
+                    const cardClass = isUnlocked ? "badge-card unlocked" : "badge-card locked";
                     
                     const escapedName = escapeHtml(ach.name);
                     const escapedDesc = escapeHtml(ach.desc);
@@ -2177,14 +2177,14 @@ function renderAchievementsAndWords() {
                     
                     const rewardWordsText = isUnlocked 
                         ? `<div style="font-size: 0.65rem; color: var(--timer-yellow); font-weight: bold; margin-top: 4px;">🎁 解放単語: ${escapedRewardWords}</div>` 
-                        : `<div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">🔒 報酬: ???</div>`;
+                        : `<div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 4px;">🎁 報酬: ${escapedRewardWords} (アンロックで解放)</div>`;
                     
                     const badgeHtml = `
-                        <div class="${cardClass}" title="${isUnlocked ? '解除済み' : '未解除'}">
-                            <div class="badge-icon">${icon}</div>
+                        <div class="${cardClass}" title="${isUnlocked ? '解除済み' : '未解除'}" style="${!isUnlocked ? 'opacity: 0.55; filter: grayscale(60%);' : ''}">
+                            <div class="badge-icon" style="font-size: 1.5rem; margin-right: 12px;">${icon}</div>
                             <div class="badge-info">
-                                <div class="badge-name">${escapedName}</div>
-                                <div class="badge-desc">${escapedDesc}</div>
+                                <div class="badge-name" style="font-weight: bold; color: ${isUnlocked ? 'var(--accent-blue)' : '#888'};">${escapedName}</div>
+                                <div class="badge-desc" style="font-size: 0.72rem; margin-top: 2px;">${escapedDesc}</div>
                                 ${rewardWordsText}
                             </div>
                         </div>
@@ -2200,8 +2200,136 @@ function renderAchievementsAndWords() {
                 badgesContainer.innerHTML = '<div class="advisory-item-web warning">実績マスタのロードに失敗しました。</div>';
             }
         });
+}
+
+function parseSimpleCondition(cond, status) {
+    const parts = cond.split(">=");
+    if (parts.length === 2) {
+        const param = parts[0].trim();
+        const targetVal = parseInt(parts[1].trim(), 10);
+        let currentVal = 0;
+        if (status[param]) {
+            currentVal = typeof status[param] === 'object' ? (status[param].current || 0) : status[param];
+        }
+        return {
+            param: param,
+            current: currentVal,
+            target: targetVal,
+            isCleared: currentVal >= targetVal
+        };
+    }
+    return null;
+}
+
+function evaluateConditionJS(conditionStr, status) {
+    const orParts = conditionStr.split(" or ");
+    let anyOrPassed = false;
+    const parsedDetails = [];
+
+    orParts.forEach(op => {
+        const andParts = op.split(" and ");
+        let allAndPassed = true;
+        const andDetails = [];
+
+        andParts.forEach(ap => {
+            const detail = parseSimpleCondition(ap, status);
+            if (detail) {
+                andDetails.push(detail);
+                if (!detail.isCleared) {
+                    allAndPassed = false;
+                }
+            }
+        });
+
+        parsedDetails.push({
+            conditions: andDetails,
+            isCleared: allAndPassed
+        });
+
+        if (allAndPassed) {
+            anyOrPassed = true;
+        }
+    });
+
+    return {
+        isCleared: anyOrPassed,
+        details: parsedDetails
+    };
+}
+
+function renderSystemTitlesOnly() {
+    if (!cachedStatusData) return;
+    const container = document.getElementById('available-system-titles-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const availableTitles = cachedStatusData.available_system_titles || [];
+    const statusObj = cachedStatusData.status || {};
+    
+    if (availableTitles.length === 0) {
+        container.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 15px; text-align: center; width: 100%;">現在、挑戦可能な称号はありません。</div>';
+        return;
+    }
+    
+    availableTitles.forEach(t => {
+        const isGenerated = t.id && t.id.startsWith("TITLE_GEN_");
+        const badgeText = isGenerated ? "Procedural AI" : "Official Title";
+        const badgeClass = isGenerated ? "system-title-type-badge generated" : "system-title-type-badge";
         
-    // 2. 称号スロットの描画
+        const escapedName = escapeHtml(t.name);
+        const escapedDesc = escapeHtml(t.desc);
+        const escapedRewardWords = t.reward_words.map(w => `「${escapeHtml(w)}」`).join(' ');
+        
+        const condEval = evaluateConditionJS(t.condition || "", statusObj);
+        
+        let progressHtml = '';
+        if (condEval.details && condEval.details.length > 0) {
+            const condGroup = condEval.details[0];
+            condGroup.conditions.forEach(c => {
+                const percent = Math.min(100, Math.floor((c.current / c.target) * 100));
+                const isCleared = c.isCleared;
+                const statusIcon = isCleared ? "✅" : "❌";
+                const statusClass = isCleared ? "param-status cleared" : "param-status";
+                
+                progressHtml += `
+                    <div class="system-title-progress-container">
+                        <div class="system-title-progress-text">
+                            <span>${c.param} (目標: ${c.target})</span>
+                            <span class="${statusClass}">${statusIcon} ${c.current} / ${c.target}</span>
+                        </div>
+                        <div class="system-title-progress-bar-bg">
+                            <div class="system-title-progress-bar-fill ${isCleared ? 'cleared' : ''}" style="width: ${percent}%;"></div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        const cardHtml = `
+            <div class="system-title-card">
+                <div class="system-title-header">
+                    <div class="system-title-name">${escapedName}</div>
+                    <span class="${badgeClass}">${badgeText}</span>
+                </div>
+                <div class="system-title-desc">${escapedDesc}</div>
+                ${progressHtml}
+                <div class="system-title-reward-words">
+                    <span>🎁 解放単語: ${escapedRewardWords}</span>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', cardHtml);
+    });
+}
+
+function renderAchievementsAndWords() {
+    if (!cachedStatusData) return;
+    
+    const ownedWords = cachedStatusData.title_parts || [];
+    
+    renderSystemTitlesOnly();
+        
     for (let i = 0; i < 4; i++) {
         const slotEl = document.getElementById(`slot-${i}`);
         if (slotEl) {
@@ -2215,7 +2343,6 @@ function renderAchievementsAndWords() {
         }
     }
     
-    // 3. 称号プレビューの描画
     const previewEl = document.getElementById('title-preview-text');
     if (previewEl) {
         if (currentBuildTitleParts.length > 0) {
@@ -2225,7 +2352,6 @@ function renderAchievementsAndWords() {
         }
     }
     
-    // 4. 所持単語パーツチップスの描画
     const wordsContainer = document.getElementById('available-words-list');
     if (wordsContainer) {
         wordsContainer.innerHTML = '';

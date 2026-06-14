@@ -1,0 +1,142 @@
+[
+  {
+    "id": "TITLE_SYS_WIS_SAGE",
+    "name": "真理の大魔導士",
+    "desc": "WISが380以上に到達する",
+    "condition": "WIS >= 380",
+    "reward_words": ["大魔導士", "真理"]
+  },
+  {
+    "id": "TITLE_SYS_STR_WARRIOR",
+    "name": "魔人の如き剛腕",
+    "desc": "STRが320以上に到達する",
+    "condition": "STR >= 320",
+    "reward_words": ["魔人", "剛腕"]
+  },
+  {
+    "id": "TITLE_SYS_DEV_PRO",
+    "name": "超凄腕エンジニア",
+    "desc": "DEVが220以上に到達する",
+    "condition": "DEV >= 220",
+    "reward_words": ["凄腕", "システム"]
+  },
+  {
+    "id": "TITLE_SYS_VIT_SHIELD",
+    "name": "不撓不屈の守護者",
+    "desc": "VITが250以上に到達する",
+    "condition": "VIT >= 250",
+    "reward_words": ["不撓不屈", "守護者"]
+  },
+  {
+    "id": "TITLE_SYS_MND_STILL",
+    "name": "不動心の到達者",
+    "desc": "MNDが350以上に到達する",
+    "condition": "MND >= 350",
+    "reward_words": ["不動", "静寂"]
+  },
+  {
+    "id": "TITLE_SYS_CHA_LEADER",
+    "name": "カリスマ指導者",
+    "desc": "CHAが300以上に到達する",
+    "condition": "CHA >= 300",
+    "reward_words": ["カリスマ", "導き"]
+  },
+  {
+    "id": "TITLE_SYS_INT_OBSERVER",
+    "name": "叡智の観測者",
+    "desc": "INTが380以上に到達する",
+    "condition": "INT >= 380",
+    "reward_words": ["叡智", "観測者"]
+  },
+  {
+    "id": "TITLE_SYS_HYBRID_SPELLSWORD",
+    "name": "魔導極めし剣士",
+    "desc": "STRが300以上、かつINTが360以上に到達する",
+    "condition": "STR >= 300 and INT >= 360",
+    "reward_words": ["魔法戦士", "魔力"]
+  },
+  {
+    "id": "TITLE_SYS_HYBRID_CYBER_ATHLETE",
+    "name": "電脳アスリート",
+    "desc": "VITが240以上、かつDEVが240以上に到達する",
+    "condition": "VIT >= 240 and DEV >= 240",
+    "reward_words": ["アスリート", "電脳"]
+  },
+  {
+    "id": "TITLE_SYS_HYBRID_PHILOSOPHER",
+    "name": "鉄意志の哲学者",
+    "desc": "WISが380以上、かつMNDが340以上に到達する",
+    "condition": "WIS >= 380 and MND >= 340",
+    "reward_words": ["哲学者", "深思"]
+  },
+  {
+    "id": "TITLE_SYS_HYBRID_ORATOR",
+    "name": "魅惑の弁論家",
+    "desc": "WISが350以上、かつCHAが280以上に到達する",
+    "condition": "WIS >= 350 and CHA >= 280",
+    "reward_words": ["語り手", "魅惑"]
+  },
+  {
+    "id": "TITLE_SYS_ALL_ROUNDER",
+    "name": "全能の旅人",
+    "desc": "すべての基本ステータス(STR/VIT/INT/WIS/MND/CHA/DEV)が200以上に到達する",
+    "condition": "STR >= 200 and VIT >= 200 and INT >= 200 and WIS >= 200 and MND >= 200 and CHA >= 200 and DEV >= 200",
+    "reward_words": ["全能", "旅人"]
+  },
+  {
+    "id": "TITLE_SYS_STR_HERO",
+    "name": "限界なき戦場の覇王",
+    "desc": "STRが350以上に到達する",
+    "condition": "STR >= 350",
+    "reward_words": ["覇王", "戦場"]
+  },
+  {
+    "id": "TITLE_SYS_VIT_DIAMOND",
+    "name": "金剛石の肉体",
+    "desc": "VITが280以上に到達する",
+    "condition": "VIT >= 280",
+    "reward_words": ["ダイヤモンド", "肉体"]
+  },
+  {
+    "id": "TITLE_SYS_INT_ABYSS",
+    "name": "深淵を覗く魔導師",
+    "desc": "INTが400以上、かつWISが380以上に到達する",
+    "condition": "INT >= 400 and WIS >= 380",
+    "reward_words": ["深淵", "深奥"]
+  },
+  {
+    "id": "TITLE_SYS_WIS_SAGE_2",
+    "name": "真理の追究者",
+    "desc": "WISが400以上に到達する",
+    "condition": "WIS >= 400",
+    "reward_words": ["真理", "探究"]
+  },
+  {
+    "id": "TITLE_SYS_WIS_SAGE_3",
+    "name": "超越の大賢者",
+    "desc": "WISが420以上に到達する",
+    "condition": "WIS >= 420",
+    "reward_words": ["大賢者", "超越"]
+  },
+  {
+    "id": "TITLE_SYS_MND_WORLD",
+    "name": "精神世界の絶対君主",
+    "desc": "MNDが400以上に到達する",
+    "condition": "MND >= 400",
+    "reward_words": ["精神", "支配"]
+  },
+  {
+    "id": "TITLE_SYS_CHA_BEAST",
+    "name": "百獣を統べる者",
+    "desc": "CHAが320以上に到達する",
+    "condition": "CHA >= 320",
+    "reward_words": ["統率者", "咆哮"]
+  },
+  {
+    "id": "TITLE_SYS_DEV_MAESTRO",
+    "name": "電脳のコード・マエストロ",
+    "desc": "DEVが260以上、かつINTが380以上に到達する",
+    "condition": "DEV >= 260 and INT >= 380",
+    "reward_words": ["マエストロ", "極光"]
+  }
+]

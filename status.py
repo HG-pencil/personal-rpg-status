@@ -1069,6 +1069,168 @@ def check_achievements(base_path, data):
 
     return newly_unlocked
 
+def eval_simple_condition(cond, status):
+    for op in [">=", "<=", ">", "<", "=="]:
+        if op in cond:
+            parts = cond.split(op)
+            if len(parts) == 2:
+                param = parts[0].strip()
+                val_str = parts[1].strip()
+                try:
+                    val = int(val_str)
+                except ValueError:
+                    return False
+                current_val = status.get(param, {}).get("current", 0)
+                if op == ">=":
+                    return current_val >= val
+                elif op == "<=":
+                    return current_val <= val
+                elif op == ">":
+                    return current_val > val
+                elif op == "<":
+                    return current_val < val
+                elif op == "==":
+                    return current_val == val
+            break
+    return False
+
+
+def eval_condition(condition_str, status):
+    or_parts = condition_str.split(" or ")
+    or_results = []
+    for op in or_parts:
+        and_parts = op.split(" and ")
+        and_results = []
+        for ap in and_parts:
+            and_results.append(eval_simple_condition(ap, status))
+        or_results.append(all(and_results))
+    return any(or_results)
+
+
+def generate_procedural_titles(count, status, exclude_ids):
+    import hashlib, random
+    prefixes = ["蒼穹の", "漆黒の", "紅蓮の", "雷鳴の", "深淵の", "機工の", "古の", "聖なる", "不屈の", "極限の", "星々の", "黎明の", "黄金の", "流星の", "混沌の", "虚無の"]
+    cores = ["戦士", "魔導士", "賢者", "騎士", "狩人", "工匠", "支配者", "求道者", "観測者", "旅人", "剣士", "守護者", "調停者", "道化師", "暗殺者", "司祭"]
+    suffixes = ["", "・真", "・極", "・超越者", "・先駆者", "・零式", "・覇王"]
+    params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
+    
+    generated = []
+    attempts = 0
+    while len(generated) < count and attempts < 100:
+        attempts += 1
+        pfx = random.choice(prefixes)
+        core = random.choice(cores)
+        sfx = random.choice(suffixes)
+        name = f"{pfx}{core}{sfx}"
+        t_id = "TITLE_GEN_" + hashlib.md5(name.encode('utf-8')).hexdigest()[:10].upper()
+        
+        if t_id in exclude_ids or any(g["id"] == t_id for g in generated):
+            continue
+            
+        num_params = random.choice([1, 2])
+        chosen_params = random.sample(params, num_params)
+        
+        cond_parts = []
+        desc_parts = []
+        for p in chosen_params:
+            curr_val = status.get(p, {}).get("current", 0)
+            target_val = curr_val + random.randint(15, 35)
+            target_val = ((target_val + 4) // 5) * 5
+            cond_parts.append(f"{p} >= {target_val}")
+            desc_parts.append(f"{p}が{target_val}以上")
+            
+        condition = " and ".join(cond_parts)
+        desc = "、かつ".join(desc_parts) + "に到達する"
+        
+        reward_words = [pfx, core]
+        if sfx:
+            reward_words.append(sfx)
+            
+        generated.append({
+            "id": t_id,
+            "name": name,
+            "desc": desc,
+            "condition": condition,
+            "reward_words": reward_words
+        })
+    return generated
+
+
+def check_titles(base_path, data):
+    unlocked_sys = data.setdefault("unlocked_system_titles", [])
+    available_sys = data.setdefault("available_system_titles", [])
+    status = data.setdefault("status", {})
+    parts = data.setdefault("title_parts", [])
+    history = data.setdefault("history", [])
+    
+    newly_unlocked = []
+    remaining_available = []
+    
+    for t in available_sys:
+        t_id = t.get("id")
+        cond = t.get("condition", "")
+        is_cleared = False
+        if cond:
+            try:
+                is_cleared = eval_condition(cond, status)
+            except Exception:
+                is_cleared = False
+                
+        if is_cleared:
+            unlocked_sys.append(t_id)
+            reward_words = t.get("reward_words", [])
+            added_words = []
+            for word in reward_words:
+                if word not in parts:
+                    parts.append(word)
+                    added_words.append(word)
+            
+            newly_unlocked.append({
+                "name": t.get("name"),
+                "words": added_words
+            })
+            
+            words_str = ", ".join(reward_words)
+            history.append({
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "event": f"Title Unlocked: {t.get('name')} (Acquired words: {words_str})",
+                "status_change": {}
+            })
+        else:
+            remaining_available.append(t)
+            
+    data["available_system_titles"] = remaining_available
+    
+    TARGET_COUNT = 5
+    current_count = len(data["available_system_titles"])
+    
+    if current_count < TARGET_COUNT:
+        needed = TARGET_COUNT - current_count
+        master_filepath = os.path.join(base_path, "web", "status_system_titles.json")
+        master_pool = []
+        if os.path.exists(master_filepath):
+            try:
+                with open(master_filepath, 'r', encoding='utf-8') as f:
+                    master_pool = json.load(f)
+            except Exception:
+                pass
+                
+        existing_ids = {t.get("id") for t in data["available_system_titles"]}
+        unlocked_ids = set(unlocked_sys)
+        
+        candidates = [t for t in master_pool if t.get("id") not in existing_ids and t.get("id") not in unlocked_ids]
+        added_from_pool = candidates[:needed]
+        data["available_system_titles"].extend(added_from_pool)
+        
+        current_count = len(data["available_system_titles"])
+        if current_count < TARGET_COUNT:
+            needed_dynamic = TARGET_COUNT - current_count
+            dynamic_titles = generate_procedural_titles(needed_dynamic, status, existing_ids | unlocked_ids | {t.get("id") for t in master_pool})
+            data["available_system_titles"].extend(dynamic_titles)
+            
+    return newly_unlocked
+
+
 def export_to_notebooklm(data, user_id="HG_pencil"):
     target_base = r"G:\マイドライブ\ノートブックLM用データ格納場所\我部宏和\RPG基本データ"
     if not os.path.exists(target_base):
@@ -1139,6 +1301,13 @@ def export_to_notebooklm(data, user_id="HG_pencil"):
         md_lines.append(f"解除数: {len(unlocked)}個")
         for ach_id in unlocked:
             md_lines.append(f"- {ach_id}")
+        md_lines.append("")
+        
+        md_lines.append("## 🎖️ 解除済みシステム称号")
+        unlocked_sys_titles = data.get("unlocked_system_titles", [])
+        md_lines.append(f"解除数: {len(unlocked_sys_titles)}個")
+        for t_id in unlocked_sys_titles:
+            md_lines.append(f"- {t_id}")
         md_lines.append("")
         
         md_lines.append("## 📜 活動記録・イベント履歴 (History)")
@@ -1503,6 +1672,7 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
 
     # 実績解除のチェック
     unlocked_list = check_achievements(base_path, data)
+    unlocked_titles_list = check_titles(base_path, data)
 
     # 旧合算カウンターは廃止しリセット
     data["accumulated_training_points"] = 0
@@ -1524,6 +1694,9 @@ def import_training_data(base_path, data, json_str, user_id="HG_pencil"):
     for ach in unlocked_list:
         words_str = "、".join([f"「{w}」" for w in ach["words"]])
         print(f" [🎉 実績解除] 実績『{ach['name']}』を達成！ 報酬単語：{words_str} を獲得しました！")
+    for ut in unlocked_titles_list:
+        words_str = "、".join([f"「{w}」" for w in ut["words"]])
+        print(f" [🎉 称号獲得] システム称号『{ut['name']}』を獲得！ 報酬単語：{words_str} が追加されました！")
     if hp_recovered_total > 0:
         print(f" [❤️ HP回復] 体調が整い、HPが {hp_recovered_total} 回復しました！(現在: {hp['current']}/{hp['max']})")
     print("======================================================================")
