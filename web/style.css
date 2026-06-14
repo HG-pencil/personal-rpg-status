@@ -1216,12 +1216,15 @@ body {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
-    padding: 5px 12px;
+    padding: 5px 10px 5px 12px;
     font-size: 0.75rem;
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s;
     user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .word-chip:hover {
@@ -1235,6 +1238,36 @@ body {
     cursor: not-allowed;
     background: rgba(0, 0, 0, 0.15);
     border-color: rgba(255, 255, 255, 0.03);
+}
+
+.word-delete-btn {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.3);
+    transition: all 0.15s;
+    padding: 0 4px;
+    border-radius: 50%;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.word-delete-btn:hover {
+    color: #ff5555;
+    background: rgba(255, 85, 85, 0.15);
+    transform: scale(1.1);
+}
+
+.word-delete-btn.disabled {
+    opacity: 0.15;
+    cursor: not-allowed;
+}
+
+.word-delete-btn.disabled:hover {
+    color: rgba(255, 255, 255, 0.3);
+    background: transparent;
+    transform: none;
 }
 
 .modal-footer {

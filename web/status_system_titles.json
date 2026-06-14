@@ -253,5 +253,67 @@
       "マエストロ",
       "極光"
     ]
+  },
+  {
+    "id": "TITLE_SYS_ACT_TRAINING_NOVICE",
+    "name": "努力の初心者",
+    "desc": "トレーニングログ反映日数が5日以上に到達する",
+    "condition": "TRAINING_DAYS >= 5",
+    "reward_words": [
+      "初心者",
+      "努力の"
+    ]
+  },
+  {
+    "id": "TITLE_SYS_ACT_EXAM_CHALLENGER",
+    "name": "限界に挑む者",
+    "desc": "試験の累計受験回数が5回以上に到達する",
+    "condition": "EXAMS_TRIED >= 5",
+    "reward_words": [
+      "チャレンジャー",
+      "挑む者"
+    ]
+  },
+  {
+    "id": "TITLE_SYS_ACT_STEADY_WORKER",
+    "name": "積み重ねし勤勉者",
+    "desc": "トレーニングログ反映日数が15日以上に到達する",
+    "condition": "TRAINING_DAYS >= 15",
+    "reward_words": [
+      "勤勉",
+      "積み重ねし",
+      "日課"
+    ]
+  },
+  {
+    "id": "TITLE_SYS_ACT_EXAM_MASTER",
+    "name": "試験を統べる者",
+    "desc": "試験の累計合格回数が8回以上に到達する",
+    "condition": "EXAMS_PASSED >= 8",
+    "reward_words": [
+      "合格者",
+      "統べる者"
+    ]
+  },
+  {
+    "id": "TITLE_SYS_ACT_REST_MASTER",
+    "name": "安らぎの賢者",
+    "desc": "休息クエスト等でHPを累計3回以上回復する",
+    "condition": "REST_COUNT >= 3",
+    "reward_words": [
+      "安らぎ",
+      "養生"
+    ]
+  },
+  {
+    "id": "TITLE_SYS_ACT_AI_DEV_PARTNER",
+    "name": "AIの共創者",
+    "desc": "AIエージェントの開発実績が累計5回以上に到達する",
+    "condition": "DEV_PROJECTS >= 5",
+    "reward_words": [
+      "パートナー",
+      "共創",
+      "AIの"
+    ]
   }
 ]

@@ -374,39 +374,39 @@ function migrateStatusData(data) {
     if (needTitleRepair || !data.available_system_titles || data.available_system_titles.length === 0) {
         data.available_system_titles = [
             {
+                "id": "TITLE_SYS_ACT_TRAINING_NOVICE",
+                "name": "努力の初心者",
+                "desc": "トレーニングログ反映日数が5日以上に到達する",
+                "condition": "TRAINING_DAYS >= 5",
+                "reward_words": ["初心者", "努力の"]
+            },
+            {
+                "id": "TITLE_SYS_ACT_EXAM_CHALLENGER",
+                "name": "限界に挑む者",
+                "desc": "試験の累計受験回数が5回以上に到達する",
+                "condition": "EXAMS_TRIED >= 5",
+                "reward_words": ["チャレンジャー", "挑む者"]
+            },
+            {
                 "id": "TITLE_SYS_AI_CYBER_JEDI",
                 "name": "極限の電脳ジェダイ",
-                "desc": "DEV（開発力）が240以上、かつMND（精神力）が350以上に到達する",
-                "condition": "DEV >= 240 and MND >= 350",
+                "desc": "DEV（開発力）が220以上、かつ試験合格回数が5回以上に到達する",
+                "condition": "DEV >= 220 and EXAMS_PASSED >= 5",
                 "reward_words": ["ジェダイ", "極限の", "フォース"]
             },
             {
                 "id": "TITLE_SYS_AI_SANCTUARY_KNIGHT",
                 "name": "聖域の鉄壁ナイト",
-                "desc": "VIT（持久）が250以上、かつMND（精神力）が350以上に到達する",
-                "condition": "VIT >= 250 and MND >= 350",
+                "desc": "VIT（持久）が220以上、かつ休息回復回数が3回以上に到達する",
+                "condition": "VIT >= 220 and REST_COUNT >= 3",
                 "reward_words": ["鉄壁", "聖域", "ナイト"]
             },
             {
-                "id": "TITLE_SYS_AI_CODE_SAGE",
-                "name": "コードを紡ぐ大賢者",
-                "desc": "DEV（開発力）が250以上、かつWIS（知恵）が400以上に到達する",
-                "condition": "DEV >= 250 and WIS >= 400",
-                "reward_words": ["コード", "賢者", "紡ぎ手"]
-            },
-            {
-                "id": "TITLE_SYS_AI_SOUL_LEADER",
-                "name": "魂のカリスマ指揮官",
-                "desc": "CHA（魅力）が320以上、かつMND（精神力）が350以上に到達する",
-                "condition": "CHA >= 320 and MND >= 350",
-                "reward_words": ["魂", "指揮官", "カリスマ"]
-            },
-            {
-                "id": "TITLE_SYS_AI_STR_WIS_HERO",
-                "name": "真理を穿つ剛力無双",
-                "desc": "STR（筋力）が350以上、かつWIS（知恵）が400以上に到達する",
-                "condition": "STR >= 350 and WIS >= 400",
-                "reward_words": ["剛力", "穿ちし", "真理"]
+                "id": "TITLE_SYS_ACT_AI_DEV_PARTNER",
+                "name": "AIの共創者",
+                "desc": "AIエージェントの開発実績が累計5回以上に到達する",
+                "condition": "DEV_PROJECTS >= 5",
+                "reward_words": ["パートナー", "共創", "AIの"]
             }
         ];
         modified = true;
@@ -2261,7 +2261,38 @@ function renderAchievementsOnly() {
         });
 }
 
-function parseSimpleCondition(cond, status) {
+function countActivitiesJS(history) {
+    const counts = {
+        "TRAINING_DAYS": 0,
+        "EXAMS_PASSED": 0,
+        "EXAMS_TRIED": 0,
+        "REST_COUNT": 0,
+        "DEV_PROJECTS": 0
+    };
+    if (!history || !Array.isArray(history)) return counts;
+    
+    history.forEach(h => {
+        const event = h.event || "";
+        if (event.includes("Training Reflected")) {
+            counts["TRAINING_DAYS"]++;
+        }
+        if (event.includes("Passed")) {
+            counts["EXAMS_PASSED"]++;
+        }
+        if (event.includes("Answer Submitted") || event.includes("Gate Exam: Passed")) {
+            counts["EXAMS_TRIED"]++;
+        }
+        if (event.includes("HP Recovered")) {
+            counts["REST_COUNT"]++;
+        }
+        if (event.includes("Project [")) {
+            counts["DEV_PROJECTS"]++;
+        }
+    });
+    return counts;
+}
+
+function parseSimpleCondition(cond, status, history) {
     if (!cond) return null;
     
     // 複数の比較演算子に対応
@@ -2282,12 +2313,18 @@ function parseSimpleCondition(cond, status) {
         const targetVal = parseInt(parts[1].trim(), 10);
         let currentVal = 0;
         
-        if (status && status[param] !== undefined && status[param] !== null) {
-            const pData = status[param];
-            if (typeof pData === 'object' && pData !== null) {
-                currentVal = pData.current !== undefined ? pData.current : 0;
-            } else if (typeof pData === 'number') {
-                currentVal = pData;
+        const activityParams = ["TRAINING_DAYS", "EXAMS_PASSED", "EXAMS_TRIED", "REST_COUNT", "DEV_PROJECTS"];
+        if (activityParams.includes(param)) {
+            const counts = countActivitiesJS(history);
+            currentVal = counts[param] || 0;
+        } else {
+            if (status && status[param] !== undefined && status[param] !== null) {
+                const pData = status[param];
+                if (typeof pData === 'object' && pData !== null) {
+                    currentVal = pData.current !== undefined ? pData.current : 0;
+                } else if (typeof pData === 'number') {
+                    currentVal = pData;
+                }
             }
         }
         
@@ -2308,7 +2345,7 @@ function parseSimpleCondition(cond, status) {
     return null;
 }
 
-function evaluateConditionJS(conditionStr, status) {
+function evaluateConditionJS(conditionStr, status, history) {
     if (!conditionStr) {
         return { isCleared: false, details: [] };
     }
@@ -2324,7 +2361,7 @@ function evaluateConditionJS(conditionStr, status) {
             const andDetails = [];
 
             andParts.forEach(ap => {
-                const detail = parseSimpleCondition(ap, status);
+                const detail = parseSimpleCondition(ap, status, history);
                 if (detail) {
                     andDetails.push(detail);
                     if (!detail.isCleared) {
@@ -2378,7 +2415,7 @@ function renderSystemTitlesOnly() {
             const escapedDesc = escapeHtml(t.desc);
             const escapedRewardWords = t.reward_words.map(w => `「${escapeHtml(w)}」`).join(' ');
             
-            const condEval = evaluateConditionJS(t.condition || "", statusObj);
+            const condEval = evaluateConditionJS(t.condition || "", statusObj, cachedStatusData.history || []);
             
             let progressHtml = '';
             if (condEval.details && condEval.details.length > 0) {
@@ -2460,6 +2497,18 @@ function renderAchievementsAndWords() {
     if (wordsContainer) {
         wordsContainer.innerHTML = '';
         
+        const countBadge = document.getElementById('title-parts-count-badge');
+        if (countBadge) {
+            countBadge.innerText = `(${ownedWords.length}/50)`;
+            if (ownedWords.length >= 50) {
+                countBadge.style.color = '#ff5555';
+                countBadge.style.fontWeight = 'bold';
+            } else {
+                countBadge.style.color = 'var(--text-secondary)';
+                countBadge.style.fontWeight = 'normal';
+            }
+        }
+
         if (ownedWords.length === 0) {
             wordsContainer.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 8px;">所持単語パーツはありません。</div>';
             return;
@@ -2467,10 +2516,26 @@ function renderAchievementsAndWords() {
         
         ownedWords.forEach(word => {
             const isUsed = currentBuildTitleParts.includes(word);
+            const isEquipped = (cachedStatusData.active_title_parts || []).includes(word);
+            const isDefault = ["目覚めし人", "の"].includes(word);
+            
             const chipClass = isUsed ? "word-chip used" : "word-chip";
             const escapedWord = escapeHtml(word);
             
-            const chipHtml = `<span class="${chipClass}" onclick="${isUsed ? '' : `selectPart(this.textContent)`}">${escapedWord}</span>`;
+            // 削除ボタンの生成（初期単語および現在装備中の単語は削除不可）
+            let deleteBtnHtml = '';
+            if (!isDefault && !isEquipped) {
+                deleteBtnHtml = `<span class="word-delete-btn" onclick="event.stopPropagation(); deleteTitlePart('${escapedWord.replace(/'/g, "\\'")}')" title="この単語を消去">&times;</span>`;
+            } else {
+                deleteBtnHtml = `<span class="word-delete-btn disabled" title="初期単語または装備中のため削除できません">&times;</span>`;
+            }
+            
+            const chipHtml = `
+                <span class="${chipClass}" onclick="${isUsed ? '' : `selectPart('${escapedWord.replace(/'/g, "\\'")}')`}">
+                    ${escapedWord}
+                    ${deleteBtnHtml}
+                </span>
+            `;
             wordsContainer.insertAdjacentHTML('beforeend', chipHtml);
         });
     }
@@ -3473,6 +3538,44 @@ function submitDailyLogImport() {
             importBtn.disabled = false;
             importBtn.innerText = "確定してインポート (一撃同期)";
         }
+    });
+}
+
+function deleteTitlePart(word) {
+    if (!cachedStatusData) return;
+    
+    // 安全ガード
+    const isDefault = ["目覚めし人", "の"].includes(word);
+    if (isDefault) {
+        alert("初期単語は消去できません。");
+        return;
+    }
+    
+    const isEquipped = (cachedStatusData.active_title_parts || []).includes(word);
+    if (isEquipped) {
+        alert("現在設定中（装備中）の単語パーツは消去できません。装備解除してからやり直してください。");
+        return;
+    }
+    
+    if (!confirm(`単語パーツ「${word}」を永久に消去しますか？\n(再度獲得するには、該当アチーブメントや称号条件の再達成が必要になる場合があります。)`)) {
+        return;
+    }
+    
+    const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
+    const oldParts = updatedData.title_parts || [];
+    updatedData.title_parts = oldParts.filter(w => w !== word);
+    
+    // Firestore同期とローカルキャッシュ更新
+    saveStatusDataToFirestore(updatedData)
+    .then(() => {
+        cachedStatusData = updatedData;
+        safeSetItem('rpg_status_cache', JSON.stringify(updatedData));
+        renderAchievementsAndWords();
+        console.log(`単語パーツ「${word}」を消去しました。`);
+    })
+    .catch(err => {
+        console.error("単語パーツ消去エラー:", err);
+        alert("消去の同期に失敗しました。ネットワーク状態を確認してください。");
     });
 }
 

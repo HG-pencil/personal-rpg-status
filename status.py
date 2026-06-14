@@ -1069,7 +1069,31 @@ def check_achievements(base_path, data):
 
     return newly_unlocked
 
-def eval_simple_condition(cond, status):
+def count_activities(history):
+    counts = {
+        "TRAINING_DAYS": 0,
+        "EXAMS_PASSED": 0,
+        "EXAMS_TRIED": 0,
+        "REST_COUNT": 0,
+        "DEV_PROJECTS": 0
+    }
+    if not history:
+        return counts
+    for h in history:
+        event = h.get("event", "")
+        if "Training Reflected" in event:
+            counts["TRAINING_DAYS"] += 1
+        if "Passed" in event:
+            counts["EXAMS_PASSED"] += 1
+        if "Answer Submitted" in event or "Gate Exam: Passed" in event:
+            counts["EXAMS_TRIED"] += 1
+        if "HP Recovered" in event:
+            counts["REST_COUNT"] += 1
+        if "Project [" in event:
+            counts["DEV_PROJECTS"] += 1
+    return counts
+
+def eval_simple_condition(cond, status, data=None):
     for op in [">=", "<=", ">", "<", "=="]:
         if op in cond:
             parts = cond.split(op)
@@ -1080,7 +1104,15 @@ def eval_simple_condition(cond, status):
                     val = int(val_str)
                 except ValueError:
                     return False
-                current_val = status.get(param, {}).get("current", 0)
+                
+                activity_params = ["TRAINING_DAYS", "EXAMS_PASSED", "EXAMS_TRIED", "REST_COUNT", "DEV_PROJECTS"]
+                if param in activity_params:
+                    history = data.get("history", []) if data else []
+                    counts = count_activities(history)
+                    current_val = counts.get(param, 0)
+                else:
+                    current_val = status.get(param, {}).get("current", 0)
+                    
                 if op == ">=":
                     return current_val >= val
                 elif op == "<=":
@@ -1095,24 +1127,25 @@ def eval_simple_condition(cond, status):
     return False
 
 
-def eval_condition(condition_str, status):
+def eval_condition(condition_str, status, data=None):
     or_parts = condition_str.split(" or ")
     or_results = []
     for op in or_parts:
         and_parts = op.split(" and ")
         and_results = []
         for ap in and_parts:
-            and_results.append(eval_simple_condition(ap, status))
+            and_results.append(eval_simple_condition(ap, status, data))
         or_results.append(all(and_results))
     return any(or_results)
 
 
-def generate_procedural_titles(count, status, exclude_ids):
+def generate_procedural_titles(count, status, exclude_ids, data=None):
     import hashlib, random
     prefixes = ["蒼穹の", "漆黒の", "紅蓮の", "雷鳴の", "深淵の", "機工の", "古の", "聖なる", "不屈の", "極限の", "星々の", "黎明の", "黄金の", "流星の", "混沌の", "虚無の"]
     cores = ["戦士", "魔導士", "賢者", "騎士", "狩人", "工匠", "支配者", "求道者", "観測者", "旅人", "剣士", "守護者", "調停者", "道化師", "暗殺者", "司祭"]
     suffixes = ["", "・真", "・極", "・超越者", "・先駆者", "・零式", "・覇王"]
-    params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
+    status_params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
+    activity_params = ["TRAINING_DAYS", "EXAMS_PASSED", "EXAMS_TRIED", "REST_COUNT", "DEV_PROJECTS"]
     
     generated = []
     attempts = 0
@@ -1127,20 +1160,49 @@ def generate_procedural_titles(count, status, exclude_ids):
         if t_id in exclude_ids or any(g["id"] == t_id for g in generated):
             continue
             
-        num_params = random.choice([1, 2])
-        chosen_params = random.sample(params, num_params)
-        
+        # 行動パラメータを1つ必ず選択
+        chosen_act = random.choice(activity_params)
         cond_parts = []
         desc_parts = []
-        for p in chosen_params:
-            curr_val = status.get(p, {}).get("current", 0)
-            target_val = curr_val + random.randint(15, 35)
-            target_val = ((target_val + 4) // 5) * 5
-            cond_parts.append(f"{p} >= {target_val}")
-            desc_parts.append(f"{p}が{target_val}以上")
+        
+        history = data.get("history", []) if data else []
+        counts = count_activities(history)
+        curr_act_val = counts.get(chosen_act, 0)
+        
+        # 行動ごとの目標増分の計算
+        if chosen_act == "TRAINING_DAYS":
+            target_act_val = curr_act_val + random.randint(3, 7)
+            desc_name = "トレーニングログ反映日数"
+            desc_parts.append(f"{desc_name}が{target_act_val}日以上")
+        elif chosen_act == "EXAMS_PASSED":
+            target_act_val = curr_act_val + random.randint(1, 3)
+            desc_name = "試験合格回数"
+            desc_parts.append(f"{desc_name}が{target_act_val}回以上")
+        elif chosen_act == "EXAMS_TRIED":
+            target_act_val = curr_act_val + random.randint(2, 5)
+            desc_name = "試験受験回数"
+            desc_parts.append(f"{desc_name}が{target_act_val}回以上")
+        elif chosen_act == "REST_COUNT":
+            target_act_val = curr_act_val + random.randint(1, 3)
+            desc_name = "休息回復回数"
+            desc_parts.append(f"{desc_name}が{target_act_val}回以上")
+        else:  # DEV_PROJECTS
+            target_act_val = curr_act_val + random.randint(1, 2)
+            desc_name = "AI開発実績回数"
+            desc_parts.append(f"{desc_name}が{target_act_val}回以上")
+            
+        cond_parts.append(f"{chosen_act} >= {target_act_val}")
+        
+        # 50%の確率で緩めのステータス条件も組み合わせる（難易度爆上がり防止）
+        if random.random() < 0.5:
+            chosen_stat = random.choice(status_params)
+            curr_stat_val = status.get(chosen_stat, {}).get("current", 0)
+            target_stat_val = curr_stat_val + random.choice([0, 5, 10, 15])
+            cond_parts.append(f"{chosen_stat} >= {target_stat_val}")
+            desc_parts.append(f"{chosen_stat}が{target_stat_val}以上")
             
         condition = " and ".join(cond_parts)
-        desc = "、かつ".join(desc_parts) + "に到達する"
+        desc = "、かつ".join(desc_parts) + "に到達する" if len(desc_parts) > 1 else desc_parts[0] + "に到達する"
         
         reward_words = [pfx, core]
         if sfx:
@@ -1172,7 +1234,7 @@ def check_titles(base_path, data):
         is_cleared = False
         if cond:
             try:
-                is_cleared = eval_condition(cond, status)
+                is_cleared = eval_condition(cond, status, data)
             except Exception:
                 is_cleared = False
                 
@@ -1182,8 +1244,11 @@ def check_titles(base_path, data):
             added_words = []
             for word in reward_words:
                 if word not in parts:
-                    parts.append(word)
-                    added_words.append(word)
+                    if len(parts) < 50:
+                        parts.append(word)
+                        added_words.append(word)
+                    else:
+                        print(f"[WARNING] Title parts limit reached (50). Skipping new word: {word}")
             
             newly_unlocked.append({
                 "name": t.get("name"),
@@ -1225,7 +1290,7 @@ def check_titles(base_path, data):
         current_count = len(data["available_system_titles"])
         if current_count < TARGET_COUNT:
             needed_dynamic = TARGET_COUNT - current_count
-            dynamic_titles = generate_procedural_titles(needed_dynamic, status, existing_ids | unlocked_ids | {t.get("id") for t in master_pool})
+            dynamic_titles = generate_procedural_titles(needed_dynamic, status, existing_ids | unlocked_ids | {t.get("id") for t in master_pool}, data=data)
             data["available_system_titles"].extend(dynamic_titles)
             
     return newly_unlocked
