@@ -1231,37 +1231,41 @@ def check_titles(base_path, data):
     for t in available_sys:
         t_id = t.get("id")
         cond = t.get("condition", "")
-        is_cleared = False
+        is_cond_cleared = False
         if cond:
             try:
-                is_cleared = eval_condition(cond, status, data)
+                is_cond_cleared = eval_condition(cond, status, data)
             except Exception:
-                is_cleared = False
+                is_cond_cleared = False
                 
-        if is_cleared:
-            unlocked_sys.append(t_id)
-            reward_words = t.get("reward_words", [])
-            added_words = []
-            for word in reward_words:
-                if word not in parts:
-                    if len(parts) < 50:
+        if is_cond_cleared:
+            if len(parts) >= 50:
+                t["is_cleared"] = True
+                remaining_available.append(t)
+                print(f"[WARNING] Title parts limit reached (50). Retaining pending claim: {t.get('name')}")
+            else:
+                t.pop("is_cleared", None)
+                unlocked_sys.append(t_id)
+                reward_words = t.get("reward_words", [])
+                added_words = []
+                for word in reward_words:
+                    if word not in parts:
                         parts.append(word)
                         added_words.append(word)
-                    else:
-                        print(f"[WARNING] Title parts limit reached (50). Skipping new word: {word}")
-            
-            newly_unlocked.append({
-                "name": t.get("name"),
-                "words": added_words
-            })
-            
-            words_str = ", ".join(reward_words)
-            history.append({
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "event": f"Title Unlocked: {t.get('name')} (Acquired words: {words_str})",
-                "status_change": {}
-            })
+                
+                newly_unlocked.append({
+                    "name": t.get("name"),
+                    "words": added_words
+                })
+                
+                words_str = ", ".join(reward_words)
+                history.append({
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "event": f"Title Unlocked: {t.get('name')} (Acquired words: {words_str})",
+                    "status_change": {}
+                })
         else:
+            t.pop("is_cleared", None)
             remaining_available.append(t)
             
     data["available_system_titles"] = remaining_available

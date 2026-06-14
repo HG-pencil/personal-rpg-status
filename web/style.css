@@ -1791,4 +1791,66 @@ body {
     gap: 3px;
 }
 
+/* 🎁 クリア済み（回収待ち）称号カードのゴールドグラデーション ＆ アニメーション */
+.system-title-card.cleared-pending {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.08) 0%, rgba(218, 165, 32, 0.03) 100%);
+    border: 1px dashed rgba(255, 215, 0, 0.4);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.05);
+    animation: goldPulse 3s infinite alternate;
+}
+
+@keyframes goldPulse {
+    0% {
+        border-color: rgba(255, 215, 0, 0.3);
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.03);
+    }
+    100% {
+        border-color: rgba(255, 215, 0, 0.6);
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+    }
+}
+
+.system-title-card.cleared-pending .system-title-name {
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.system-title-claim-action {
+    margin-top: 6px;
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    border: none;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 10px rgba(255, 165, 0, 0.2);
+}
+
+.system-title-claim-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(255, 165, 0, 0.35);
+    filter: brightness(1.1);
+}
+
+.system-title-claim-action .claim-gift-icon {
+    font-size: 1.1rem;
+    animation: bounceIcon 0.8s infinite alternate;
+}
+
+.system-title-claim-action .claim-action-text {
+    font-size: 0.72rem;
+    font-weight: bold;
+    color: #0d0d1a;
+    letter-spacing: 0.5px;
+}
+
+@keyframes bounceIcon {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-3px); }
+}
+
 

@@ -2439,15 +2439,31 @@ function renderSystemTitlesOnly() {
                     `;
                 });
             }
+
+            const isClearedPending = t.is_cleared === true;
+            let cardClass = "system-title-card";
+            let actionHtml = '';
+            
+            if (isClearedPending) {
+                cardClass = "system-title-card cleared-pending";
+                actionHtml = `
+                    <div class="system-title-claim-action" onclick="claimSystemTitle('${t.id}')">
+                        <span class="claim-gift-icon">🎁</span>
+                        <span class="claim-action-text">タップして称号＆単語パーツを回収！</span>
+                    </div>
+                `;
+            } else {
+                actionHtml = progressHtml;
+            }
             
             const cardHtml = `
-                <div class="system-title-card">
+                <div class="${cardClass}">
                     <div class="system-title-header">
                         <div class="system-title-name">${escapedName}</div>
                         <span class="${badgeClass}">${badgeText}</span>
                     </div>
                     <div class="system-title-desc">${escapedDesc}</div>
-                    ${progressHtml}
+                    ${actionHtml}
                     <div class="system-title-reward-words">
                         <span>🎁 解放単語: ${escapedRewardWords}</span>
                     </div>
@@ -3576,6 +3592,74 @@ function deleteTitlePart(word) {
     .catch(err => {
         console.error("単語パーツ消去エラー:", err);
         alert("消去の同期に失敗しました。ネットワーク状態を確認してください。");
+    });
+}
+
+function claimSystemTitle(tId) {
+    if (!cachedStatusData) return;
+    
+    // 枠数チェック
+    const ownedWords = cachedStatusData.title_parts || [];
+    if (ownedWords.length >= 50) {
+        alert("単語パーツの所持数が上限（50個）に達しています。\n不要な単語パーツを消去（「×」ボタン）して空きを作ってから回収してください。");
+        return;
+    }
+    
+    // 称号オブジェクトの取得
+    const availableTitles = cachedStatusData.available_system_titles || [];
+    const targetTitle = availableTitles.find(t => t.id === tId);
+    if (!targetTitle) {
+        alert("該当の称号データが見つかりませんでした。");
+        return;
+    }
+    
+    // アンロック処理の適用
+    const updatedData = JSON.parse(JSON.stringify(cachedStatusData));
+    
+    // available_system_titles から削除
+    updatedData.available_system_titles = (updatedData.available_system_titles || []).filter(t => t.id !== tId);
+    
+    // unlocked_system_titles に追加
+    if (!updatedData.unlocked_system_titles) updatedData.unlocked_system_titles = [];
+    if (!updatedData.unlocked_system_titles.includes(tId)) {
+        updatedData.unlocked_system_titles.push(tId);
+    }
+    
+    // 単語の追加 (上限を超えないように制御)
+    const rewardWords = targetTitle.reward_words || [];
+    const parts = updatedData.title_parts || [];
+    
+    rewardWords.forEach(word => {
+        if (!parts.includes(word)) {
+            if (parts.length < 50) {
+                parts.push(word);
+            }
+        }
+    });
+    
+    // 履歴追加
+    const today = getTodayString();
+    const wordsStr = rewardWords.join(", ");
+    if (!updatedData.history) updatedData.history = [];
+    updatedData.history.push({
+        "date": today,
+        "event": `Title Unlocked: ${targetTitle.name} (Acquired words: ${wordsStr}) (Claimed manually)`,
+        "status_change": {}
+    });
+    
+    // Firestore同期とローカルキャッシュ更新
+    saveStatusDataToFirestore(updatedData)
+    .then(() => {
+        cachedStatusData = updatedData;
+        safeSetItem('rpg_status_cache', JSON.stringify(updatedData));
+        
+        alert(`🎉 システム称号『${targetTitle.name}』を獲得しました！\n報酬単語：${rewardWords.map(w => `「${w}」`).join(' ')} が追加されました！`);
+        
+        renderAchievementsAndWords();
+    })
+    .catch(err => {
+        console.error("手動称号回収エラー:", err);
+        alert("クラウドデータベースへの同期に失敗しました。接続状態を確認してください。");
     });
 }
 
