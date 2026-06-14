@@ -1088,63 +1088,6 @@ function loadAvailableTests() {
     if (!container) return;
     container.innerHTML = ''; // クリア
     
-    // チケットが完全に不足している場合（専用もallも全て0）
-    if (totalTickets <= 0) {
-        // チケット不足警告と回復ミッションセクションを表示
-        container.innerHTML = `
-            <div class="item-card" style="border-color: var(--accent-red-dim); background: rgba(255, 71, 87, 0.02); padding: 16px; text-align: center; display: block; width: 100%; margin-bottom: 15px;">
-                <div style="font-size: 1.8rem; margin-bottom: 4px;">🎫 ❌</div>
-                <div style="font-weight: bold; font-size: 0.9rem; color: #ffffff; margin-bottom: 4px;">測定チケットが不足しています</div>
-                <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
-                    通常のゲート試験を受けるには、対応するステータスの専用チケットまたはallチケットが必要です。<br>
-                    以下の「チケット回復ミッション（追試）」を達成してチケットを復旧させましょう！
-                </div>
-            </div>
-            <div style="width: 100%; text-align: left; margin-bottom: 8px;">
-                <h4 style="font-family: var(--font-pixel); font-size: 0.75rem; color: var(--accent-blue);">🔥 チケット回復ミッション一覧</h4>
-            </div>
-        `;
-        
-        fetch('status_tests.json')
-            .then(res => {
-                if (!res.ok) throw new Error('試験データの取得失敗');
-                return res.json();
-            })
-            .then(allTests => {
-                const trainingTasks = allTests.filter(t => t.is_training);
-                if (trainingTasks.length === 0) {
-                    container.insertAdjacentHTML('beforeend', '<div class="advisory-item-web">現在、有効な回復ミッションはありません。</div>');
-                    return;
-                }
-                
-                trainingTasks.forEach(test => {
-                    const timeMin = test.time_limit_seconds / 60;
-                    const escapedId = escapeHtml(test.id);
-                    const escapedTitle = escapeHtml(test.question.split('\n')[0].replace('【', '').replace('】', ''));
-                    const escapedDiff = escapeHtml(test.difficulty);
-                    const escapedTime = escapeHtml(String(timeMin));
-                    const cardHtml = `
-                        <div class="test-select-card" style="border-color: rgba(0, 210, 255, 0.25);">
-                            <div class="test-card-left">
-                                <div class="test-card-title" style="color: var(--accent-blue);">【追試】${escapedTitle}</div>
-                                <div class="test-card-meta" style="margin-top: 4px;">
-                                    <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${escapedDiff}</span></span>
-                                    <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
-                                </div>
-                            </div>
-                            <button class="btn btn-primary" onclick="startTest('${escapedId}')">ミッション開始</button>
-                        </div>
-                    `;
-                    container.insertAdjacentHTML('beforeend', cardHtml);
-                });
-            })
-            .catch(err => {
-                console.error(err);
-                container.insertAdjacentHTML('beforeend', '<div class="advisory-item-web warning">ミッションデータの読み込みに失敗しました。</div>');
-            });
-        return;
-    }
-    
     // 全試験問題のリストを取得 (静的ファイルからロード)
     fetch('status_tests.json')
         .then(res => {
@@ -1154,9 +1097,13 @@ function loadAvailableTests() {
         .then(allTests => {
             let gateTests = [];
             let measurementTests = [];
+            let trainingTasks = [];
             
             allTests.forEach(test => {
-                if (test.is_training) return;
+                if (test.is_training) {
+                    trainingTasks.push(test);
+                    return;
+                }
                 
                 const param = test.param;
                 const targetGate = test.target_gate;
@@ -1175,6 +1122,46 @@ function loadAvailableTests() {
             });
             
             let html = '';
+            
+            // 0. チケットが完全に不足している場合、警告と回復ミッションを表示
+            if (totalTickets <= 0) {
+                html += `
+                    <div class="item-card" style="border-color: var(--accent-red-dim); background: rgba(255, 71, 87, 0.02); padding: 16px; text-align: center; display: block; width: 100%; margin-bottom: 15px;">
+                        <div style="font-size: 1.8rem; margin-bottom: 4px;">🎫 ❌</div>
+                        <div style="font-weight: bold; font-size: 0.9rem; color: #ffffff; margin-bottom: 4px;">測定チケットが不足しています</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                            通常のゲート試験を受けるには、対応するステータスの専用チケットまたはallチケットが必要です。<br>
+                            以下の「チケット回復ミッション（追試）」を達成してチケットを復旧させましょう！
+                        </div>
+                    </div>
+                    <div style="width: 100%; text-align: left; margin-bottom: 8px;">
+                        <h4 style="font-family: var(--font-pixel); font-size: 0.75rem; color: var(--accent-blue);">🔥 チケット回復ミッション一覧</h4>
+                    </div>
+                `;
+                if (trainingTasks.length === 0) {
+                    html += '<div class="advisory-item-web">現在、有効な回復ミッションはありません。</div>';
+                } else {
+                    trainingTasks.forEach(test => {
+                        const timeMin = test.time_limit_seconds / 60;
+                        const escapedId = escapeHtml(test.id);
+                        const escapedTitle = escapeHtml(test.question.split('\n')[0].replace('【', '').replace('】', ''));
+                        const escapedDiff = escapeHtml(test.difficulty);
+                        const escapedTime = escapeHtml(String(timeMin));
+                        html += `
+                            <div class="test-select-card" style="border-color: rgba(0, 210, 255, 0.25); margin-bottom: 10px;">
+                                <div class="test-card-left">
+                                    <div class="test-card-title" style="color: var(--accent-blue);">【追試】${escapedTitle}</div>
+                                    <div class="test-card-meta" style="margin-top: 4px;">
+                                        <span>難易度: <span class="meta-diff" style="color: var(--accent-blue);">${escapedDiff}</span></span>
+                                        <span>制限時間: <span class="meta-time">${escapedTime} 分</span></span>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="startTest('${escapedId}', 'training')">ミッション開始</button>
+                            </div>
+                        `;
+                    });
+                }
+            }
             
             // 1. ゲート試験の描画
             html += `
@@ -1236,7 +1223,7 @@ function loadAvailableTests() {
                                 </div>
                                 ${warningText}
                             </div>
-                            <button class="btn btn-primary" ${btnDisabled ? 'disabled style="' + btnStyle + '"' : ''} onclick="startTest('${escapedId}')">試験開始</button>
+                            <button class="btn btn-primary" ${btnDisabled ? 'disabled style="' + btnStyle + '"' : ''} onclick="startTest('${escapedId}', 'gate')">試験開始</button>
                         </div>
                     `;
                 });
@@ -1272,7 +1259,7 @@ function loadAvailableTests() {
                                     <span>状態: <span class="meta-time" style="color: var(--hp-green); font-weight:bold;">挑戦可能 (フリー)</span></span>
                                 </div>
                             </div>
-                            <button class="btn btn-primary" style="background: var(--accent-blue); border-color: var(--accent-blue);" onclick="startTest('${escapedId}')">測定開始</button>
+                            <button class="btn btn-primary" style="background: var(--accent-blue); border-color: var(--accent-blue);" onclick="startTest('${escapedId}', 'measurement')">測定開始</button>
                         </div>
                     `;
                 });
@@ -1286,7 +1273,7 @@ function loadAvailableTests() {
         });
 }
 
-function startTest(testId) {
+function startTest(testId, testType) {
     if (!cachedStatusData) return;
     
     const isTrainingTask = testId.startsWith("TRAIN-");
@@ -1306,15 +1293,13 @@ function startTest(testId) {
             const pData = status[param] || { current: 100 };
             const currVal = pData.current;
             
-            // 本来実力測定として受けているのか、ゲートとして受けているのかを判断するための仮振り分け
-            // ここでは startTest は button 属性の onclick から呼ばれるため、
-            // loadAvailableTests で test_type が付与されていましたが、fetchし直すと test_type が無いため、
-            // 呼び出し元のコンテキストが gate なのか measurement なのかを、ボタン要素やID、ステータス値から判定
-            // is_training でなく、かつ targetGate <= currVal である場合を measurement とする（旧仕様との互換）
-            // または、レベルキャップ-20未満である場合は、gateとしては startTest ボタンが無効化されているため、
-            // ユーザーが startTest を実行できたということは、それは measurement であるはずです。
-            // しかし、意図的に判定を厳密にするため、もし getNextGate(currVal) === targetGate かつ現在の値が targetGate - 20 以上なら gate、そうでなければ measurement として扱います。
-            const isMeasurement = !test.is_training && (targetGate <= currVal || currVal < (targetGate - 20));
+            // 明示的に渡された testType を優先し、なければステータス値から自動判定（フォールバック）
+            let isMeasurement = false;
+            if (testType) {
+                isMeasurement = (testType === 'measurement');
+            } else {
+                isMeasurement = !test.is_training && (targetGate <= currVal || currVal < (targetGate - 20));
+            }
             
             // 受験資格チェック (追試ミッションおよび実力測定試験でない場合のみ)
             if (!isTrainingTask && !isMeasurement) {
