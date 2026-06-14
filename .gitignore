@@ -16,3 +16,4 @@ pending_answers_*.json
 Thumbs.db
 config_auth.json
 private_key_*.pem
+config.json
