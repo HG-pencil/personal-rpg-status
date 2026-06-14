@@ -3625,15 +3625,13 @@ function claimSystemTitle(tId) {
         updatedData.unlocked_system_titles.push(tId);
     }
     
-    // 単語の追加 (上限を超えないように制御)
+    // 単語の追加 (開始時点で50個未満であれば、この称号の報酬単語はすべて追加する)
     const rewardWords = targetTitle.reward_words || [];
     const parts = updatedData.title_parts || [];
     
     rewardWords.forEach(word => {
         if (!parts.includes(word)) {
-            if (parts.length < 50) {
-                parts.push(word);
-            }
+            parts.push(word);
         }
     });
     
