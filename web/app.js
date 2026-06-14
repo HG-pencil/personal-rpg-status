@@ -358,7 +358,7 @@ function migrateStatusData(data) {
         data.unlocked_system_titles = [];
         modified = true;
     }
-    if (!data.available_system_titles) {
+    if (!data.available_system_titles || data.available_system_titles.length === 0) {
         data.available_system_titles = [
             {
                 "id": "TITLE_SYS_AI_CYBER_JEDI",
@@ -2249,124 +2249,169 @@ function renderAchievementsOnly() {
 }
 
 function parseSimpleCondition(cond, status) {
-    const parts = cond.split(">=");
-    if (parts.length === 2) {
+    if (!cond) return null;
+    
+    // 複数の比較演算子に対応
+    const operators = [">=", "<=", ">", "<", "=="];
+    let selectedOp = null;
+    let parts = [];
+    
+    for (const op of operators) {
+        if (cond.includes(op)) {
+            selectedOp = op;
+            parts = cond.split(op);
+            break;
+        }
+    }
+    
+    if (parts.length === 2 && selectedOp) {
         const param = parts[0].trim();
         const targetVal = parseInt(parts[1].trim(), 10);
         let currentVal = 0;
-        if (status[param]) {
-            currentVal = typeof status[param] === 'object' ? (status[param].current || 0) : status[param];
+        
+        if (status && status[param] !== undefined && status[param] !== null) {
+            const pData = status[param];
+            if (typeof pData === 'object' && pData !== null) {
+                currentVal = pData.current !== undefined ? pData.current : 0;
+            } else if (typeof pData === 'number') {
+                currentVal = pData;
+            }
         }
+        
+        let isCleared = false;
+        if (selectedOp === ">=") isCleared = currentVal >= targetVal;
+        else if (selectedOp === "<=") isCleared = currentVal <= targetVal;
+        else if (selectedOp === ">") isCleared = currentVal > targetVal;
+        else if (selectedOp === "<") isCleared = currentVal < targetVal;
+        else if (selectedOp === "==") isCleared = currentVal == targetVal;
+        
         return {
             param: param,
             current: currentVal,
             target: targetVal,
-            isCleared: currentVal >= targetVal
+            isCleared: isCleared
         };
     }
     return null;
 }
 
 function evaluateConditionJS(conditionStr, status) {
-    const orParts = conditionStr.split(" or ");
-    let anyOrPassed = false;
-    const parsedDetails = [];
+    if (!conditionStr) {
+        return { isCleared: false, details: [] };
+    }
+    
+    try {
+        const orParts = conditionStr.split(" or ");
+        let anyOrPassed = false;
+        const parsedDetails = [];
 
-    orParts.forEach(op => {
-        const andParts = op.split(" and ");
-        let allAndPassed = true;
-        const andDetails = [];
+        orParts.forEach(op => {
+            const andParts = op.split(" and ");
+            let allAndPassed = true;
+            const andDetails = [];
 
-        andParts.forEach(ap => {
-            const detail = parseSimpleCondition(ap, status);
-            if (detail) {
-                andDetails.push(detail);
-                if (!detail.isCleared) {
-                    allAndPassed = false;
+            andParts.forEach(ap => {
+                const detail = parseSimpleCondition(ap, status);
+                if (detail) {
+                    andDetails.push(detail);
+                    if (!detail.isCleared) {
+                        allAndPassed = false;
+                    }
                 }
+            });
+
+            parsedDetails.push({
+                conditions: andDetails,
+                isCleared: allAndPassed
+            });
+
+            if (allAndPassed) {
+                anyOrPassed = true;
             }
         });
 
-        parsedDetails.push({
-            conditions: andDetails,
-            isCleared: allAndPassed
-        });
-
-        if (allAndPassed) {
-            anyOrPassed = true;
-        }
-    });
-
-    return {
-        isCleared: anyOrPassed,
-        details: parsedDetails
-    };
+        return {
+            isCleared: anyOrPassed,
+            details: parsedDetails
+        };
+    } catch (e) {
+        console.error("evaluateConditionJS error:", e);
+        return { isCleared: false, details: [] };
+    }
 }
 
 function renderSystemTitlesOnly() {
-    if (!cachedStatusData) return;
-    const container = document.getElementById('available-system-titles-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    const availableTitles = cachedStatusData.available_system_titles || [];
-    const statusObj = cachedStatusData.status || {};
-    
-    if (availableTitles.length === 0) {
-        container.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 15px; text-align: center; width: 100%;">現在、挑戦可能な称号はありません。</div>';
-        return;
-    }
-    
-    availableTitles.forEach(t => {
-        const isGenerated = t.id && t.id.startsWith("TITLE_GEN_");
-        const badgeText = isGenerated ? "Procedural AI" : "Official Title";
-        const badgeClass = isGenerated ? "system-title-type-badge generated" : "system-title-type-badge";
+    try {
+        if (!cachedStatusData) return;
+        const container = document.getElementById('available-system-titles-container');
+        if (!container) return;
         
-        const escapedName = escapeHtml(t.name);
-        const escapedDesc = escapeHtml(t.desc);
-        const escapedRewardWords = t.reward_words.map(w => `「${escapeHtml(w)}」`).join(' ');
+        container.innerHTML = '';
         
-        const condEval = evaluateConditionJS(t.condition || "", statusObj);
+        const availableTitles = cachedStatusData.available_system_titles || [];
+        const statusObj = cachedStatusData.status || {};
         
-        let progressHtml = '';
-        if (condEval.details && condEval.details.length > 0) {
-            const condGroup = condEval.details[0];
-            condGroup.conditions.forEach(c => {
-                const percent = Math.min(100, Math.floor((c.current / c.target) * 100));
-                const isCleared = c.isCleared;
-                const statusIcon = isCleared ? "✅" : "❌";
-                const statusClass = isCleared ? "param-status cleared" : "param-status";
-                
-                progressHtml += `
-                    <div class="system-title-progress-container">
-                        <div class="system-title-progress-text">
-                            <span>${c.param} (目標: ${c.target})</span>
-                            <span class="${statusClass}">${statusIcon} ${c.current} / ${c.target}</span>
-                        </div>
-                        <div class="system-title-progress-bar-bg">
-                            <div class="system-title-progress-bar-fill ${isCleared ? 'cleared' : ''}" style="width: ${percent}%;"></div>
-                        </div>
-                    </div>
-                `;
-            });
+        if (availableTitles.length === 0) {
+            container.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 15px; text-align: center; width: 100%;">現在、挑戦可能な称号はありません。</div>';
+            return;
         }
         
-        const cardHtml = `
-            <div class="system-title-card">
-                <div class="system-title-header">
-                    <div class="system-title-name">${escapedName}</div>
-                    <span class="${badgeClass}">${badgeText}</span>
+        availableTitles.forEach(t => {
+            const isGenerated = t.id && t.id.startsWith("TITLE_GEN_");
+            const badgeText = isGenerated ? "Procedural AI" : "Official Title";
+            const badgeClass = isGenerated ? "system-title-type-badge generated" : "system-title-type-badge";
+            
+            const escapedName = escapeHtml(t.name);
+            const escapedDesc = escapeHtml(t.desc);
+            const escapedRewardWords = t.reward_words.map(w => `「${escapeHtml(w)}」`).join(' ');
+            
+            const condEval = evaluateConditionJS(t.condition || "", statusObj);
+            
+            let progressHtml = '';
+            if (condEval.details && condEval.details.length > 0) {
+                const condGroup = condEval.details[0];
+                condGroup.conditions.forEach(c => {
+                    const percent = Math.min(100, Math.floor((c.current / c.target) * 100));
+                    const isCleared = c.isCleared;
+                    const statusIcon = isCleared ? "✅" : "❌";
+                    const statusClass = isCleared ? "param-status cleared" : "param-status";
+                    
+                    progressHtml += `
+                        <div class="system-title-progress-container">
+                            <div class="system-title-progress-text">
+                                <span>${c.param} (目標: ${c.target})</span>
+                                <span class="${statusClass}">${statusIcon} ${c.current} / ${c.target}</span>
+                            </div>
+                            <div class="system-title-progress-bar-bg">
+                                <div class="system-title-progress-bar-fill ${isCleared ? 'cleared' : ''}" style="width: ${percent}%;"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            const cardHtml = `
+                <div class="system-title-card">
+                    <div class="system-title-header">
+                        <div class="system-title-name">${escapedName}</div>
+                        <span class="${badgeClass}">${badgeText}</span>
+                    </div>
+                    <div class="system-title-desc">${escapedDesc}</div>
+                    ${progressHtml}
+                    <div class="system-title-reward-words">
+                        <span>🎁 解放単語: ${escapedRewardWords}</span>
+                    </div>
                 </div>
-                <div class="system-title-desc">${escapedDesc}</div>
-                ${progressHtml}
-                <div class="system-title-reward-words">
-                    <span>🎁 解放単語: ${escapedRewardWords}</span>
-                </div>
-            </div>
-        `;
-        container.insertAdjacentHTML('beforeend', cardHtml);
-    });
+            `;
+            container.insertAdjacentHTML('beforeend', cardHtml);
+        });
+    } catch (err) {
+        console.error("renderSystemTitlesOnly critical error:", err);
+        const container = document.getElementById('available-system-titles-container');
+        if (container) {
+            container.innerHTML = `<div class="advisory-item-web warning" style="font-size: 0.75rem;">⚠️ 称号条件の評価中にエラーが発生しました: ${escapeHtml(err.message)}</div>`;
+        }
+    }
 }
 
 function renderAchievementsAndWords() {

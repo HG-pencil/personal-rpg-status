@@ -1704,7 +1704,7 @@ body {
 
 .system-title-desc {
     font-size: 0.72rem;
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.75);
     line-height: 1.3;
 }
 
@@ -1717,7 +1717,7 @@ body {
 
 .system-title-progress-text {
     font-size: 0.65rem;
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.6);
     display: flex;
     justify-content: space-between;
 }
