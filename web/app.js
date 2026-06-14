@@ -548,13 +548,41 @@ function mergeStatusData(cloud, local, base) {
     return merged;
 }
 
-// 楽観的ロックを用いたFirestore保存処理
-function saveStatusDataToFirestore(updatedData) {
+// 楽観的ロックを用いたFirestore保存処理（isFast=trueの時は事前フェッチされたキャッシュを信用してgetをスキップ）
+function saveStatusDataToFirestore(updatedData, isFast = false) {
     if (!updatedData) return Promise.reject("データがありません");
     
     if (!originalBaseData && cachedStatusData) {
         originalBaseData = JSON.parse(JSON.stringify(cachedStatusData));
     }
+    
+    // 高速書き込みモード（isFast が true でキャッシュが存在する場合）
+    if (isFast && cachedStatusData) {
+        console.log("[Fast Path] Firestore GET をスキップして直接書き込みを開始します。");
+        let finalData = updatedData;
+        
+        // cachedStatusData を現在のクラウドの状態と仮定
+        const cloudData = cachedStatusData;
+        
+        // revisionをインクリメント
+        finalData.revision = (cloudData.revision || 1) + 1;
+        finalData.last_updated = new Date().toISOString();
+        
+        // クラウド送信用に個人情報をマスキング
+        const maskedData = maskSensitiveData(finalData);
+        
+        return userDocRef.set({
+            status_json: JSON.stringify(maskedData)
+        }).then(() => {
+            console.log("[Fast Path] Firestoreへの同期成功。New Revision:", finalData.revision);
+            cachedStatusData = finalData;
+            originalBaseData = JSON.parse(JSON.stringify(finalData));
+            updateUI(finalData);
+            initRadarChart(finalData);
+            return finalData;
+        });
+    }
+
     
     if (updatedData.revision === undefined) {
         updatedData.revision = 1;
@@ -1337,6 +1365,12 @@ function startTest(testId, testType) {
             
             // 公開鍵をバックグラウンドで事前ロードしてキャッシュ
             preloadPublicKey("v1");
+            // さらに最新のFirestoreデータを裏で再取得してキャッシュとベースラインを更新（提出時の高速書き込み用）
+            fetchStatusData().then(() => {
+                console.log("[OK] Firestore status data preloaded for fast submit.");
+            }).catch(err => {
+                console.warn("Failed to preload status data:", err);
+            });
             
             // 問題文セット
             document.getElementById('test-question-text').innerText = test.question;
@@ -1587,8 +1621,8 @@ async function submitTestAnswer(isTimeout = false) {
     
     updatedData.last_updated = new Date().toISOString();
     
-    // Firestore へ同期
-    saveStatusDataToFirestore(updatedData)
+    // Firestore へ高速同期（試験中に他端末での競合が起きないと想定し、getをスキップ）
+    saveStatusDataToFirestore(updatedData, true)
     .then(() => {
         // 通常試験完了時の表示を初期状態に戻す
         document.querySelector('#test-complete-view .complete-icon').innerText = "📝";
