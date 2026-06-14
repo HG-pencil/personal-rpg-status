@@ -420,6 +420,14 @@ function maskSensitiveData(data) {
     if (copy.pending_answers) {
         copy.pending_answers.forEach(ans => {
             if (ans.answer && ans.test_id && !ans.test_id.startsWith("TRAIN-")) {
+                const val = ans.answer;
+                // 暗号化オブジェクトまたはJSON文字列の場合はスキップ
+                if (typeof val === 'object' && val !== null && 'key_version' in val) {
+                    return;
+                }
+                if (typeof val === 'string' && val.trim().startsWith('{') && val.includes('key_version')) {
+                    return;
+                }
                 ans.answer = "[記述回答はローカルにのみ保存されています]";
             }
         });
