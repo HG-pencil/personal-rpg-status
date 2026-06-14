@@ -614,6 +614,8 @@ function fetchStatusData() {
             originalBaseData = JSON.parse(JSON.stringify(data)); // ベースラインの保存
             updateUI(data);
             initRadarChart(data);
+            // 公開鍵をバックグラウンドで事前ロードしてキャッシュ
+            preloadPublicKey("v1");
             return data;
         })
         .catch(error => {
@@ -1333,6 +1335,9 @@ function startTest(testId, testType) {
             // UI表示の切り替え
             switchTestView('test-active-view');
             
+            // 公開鍵をバックグラウンドで事前ロードしてキャッシュ
+            preloadPublicKey("v1");
+            
             // 問題文セット
             document.getElementById('test-question-text').innerText = test.question;
             document.getElementById('test-answer-input').value = '';
@@ -1408,28 +1413,52 @@ function updateTimerUI() {
     }
 }
 
+let cachedPublicKey = null;
+let cachedPublicKeyVersion = null;
+
+// 公開鍵をバックグラウンドで事前ロード・キャッシュする関数
+async function preloadPublicKey(keyVersion = "v1") {
+    if (cachedPublicKey && cachedPublicKeyVersion === keyVersion) {
+        return cachedPublicKey;
+    }
+    try {
+        const pubKeyResponse = await fetch(`public_key_${keyVersion}.json`);
+        if (!pubKeyResponse.ok) {
+            throw new Error(`公開鍵 (version: ${keyVersion}) のロードに失敗しました`);
+        }
+        const jwkKey = await pubKeyResponse.json();
+        const pubKey = await window.crypto.subtle.importKey(
+            "jwk",
+            jwkKey,
+            {
+                name: "RSA-OAEP",
+                hash: { name: "SHA-256" }
+            },
+            false,
+            ["encrypt"]
+        );
+        cachedPublicKey = pubKey;
+        cachedPublicKeyVersion = keyVersion;
+        console.log(`[OK] Public key preloaded and cached (version: ${keyVersion})`);
+        return pubKey;
+    } catch (e) {
+        console.error("Public key preload failed:", e);
+        return null;
+    }
+}
+
 // 公開鍵をロードして暗号化を行う非同期関数
 async function encryptAnswer(plainText, keyVersion = "v1") {
-    // 1. 公開鍵 (JWK) をロード
-    const pubKeyResponse = await fetch(`public_key_${keyVersion}.json`);
-    if (!pubKeyResponse.ok) {
+    // 1. キャッシュから公開鍵を取得、無ければロード
+    let pubKey = cachedPublicKey;
+    if (!pubKey || cachedPublicKeyVersion !== keyVersion) {
+        pubKey = await preloadPublicKey(keyVersion);
+    }
+    if (!pubKey) {
         throw new Error(`公開鍵 (version: ${keyVersion}) のロードに失敗しました`);
     }
-    const jwkKey = await pubKeyResponse.json();
 
-    // 2. RSA-OAEP 公開鍵のインポート (SHA-256 指定)
-    const pubKey = await window.crypto.subtle.importKey(
-        "jwk",
-        jwkKey,
-        {
-            name: "RSA-OAEP",
-            hash: { name: "SHA-256" } // 3072bit に合わせた SHA-256 指定
-        },
-        false,
-        ["encrypt"]
-    );
-
-    // 3. AES-GCM 共通鍵 (256ビット) の一時生成
+    // 2. AES-GCM 共通鍵 (256ビット) の一時生成
     const aesKey = await window.crypto.subtle.generateKey(
         {
             name: "AES-GCM",
