@@ -1138,6 +1138,9 @@ function loadAvailableTests() {
             let measurementTests = [];
             let trainingTasks = [];
             
+            // パラメータごとに試験をグループ化する
+            const testsByParam = {};
+            
             allTests.forEach(test => {
                 if (test.is_training) {
                     trainingTasks.push(test);
@@ -1145,20 +1148,65 @@ function loadAvailableTests() {
                 }
                 
                 const param = test.param;
+                if (!testsByParam[param]) {
+                    testsByParam[param] = [];
+                }
+                testsByParam[param].push(test);
+                
+                // ゲート試験（次のゲートに該当するもの）
                 const targetGate = test.target_gate;
                 const pData = status[param] || { current: 100 };
                 const currVal = pData.current;
-                
-                // ゲート試験（次のゲートに該当するもの）
                 if (getNextGate(currVal) === targetGate) {
                     const gateTest = { ...test, test_type: 'gate' };
                     gateTests.push(gateTest);
                 }
-                
-                // 実力測定試験（チケット不要）には全件を無条件で追加
-                const measurementTest = { ...test, test_type: 'measurement' };
-                measurementTests.push(measurementTest);
             });
+            
+            // 各パラメータごとに、現在値に最も適した実力測定試験を1件のみ選出する
+            Object.keys(testsByParam).forEach(param => {
+                const paramTests = testsByParam[param];
+                const pData = status[param] || { current: 100 };
+                const currVal = pData.current;
+                
+                // 理想のターゲットゲート（現在値が属する100刻みのランク帯。例: 200〜299なら200）
+                const idealGate = Math.floor(currVal / 100) * 100;
+                
+                let bestTest = null;
+                
+                // 1. 現在のランク帯（idealGate）に完全一致する試験を探す
+                bestTest = paramTests.find(t => t.target_gate === idealGate);
+                
+                if (!bestTest) {
+                    // 2. なければ、現在値より上のゲートの中で最も低い（次に目指すべき）試験を探す
+                    const higherTests = paramTests.filter(t => t.target_gate > currVal)
+                                                  .sort((a, b) => a.target_gate - b.target_gate);
+                    if (higherTests.length > 0) {
+                        bestTest = higherTests[0];
+                    }
+                }
+                
+                if (!bestTest) {
+                    // 3. それもなければ、現在値以下のゲートの中で最大のものを探す（すでにクリア済みの最大難易度）
+                    const lowerTests = paramTests.filter(t => t.target_gate <= currVal)
+                                                 .sort((a, b) => b.target_gate - a.target_gate);
+                    if (lowerTests.length > 0) {
+                        bestTest = lowerTests[0];
+                    }
+                }
+                
+                if (bestTest) {
+                    const measurementTest = { ...bestTest, test_type: 'measurement' };
+                    measurementTests.push(measurementTest);
+                }
+            });
+            
+            // 表示の見栄えを揃えるため、STR, VIT, INT, WIS, MND, CHA, DEV の順番でソート
+            const paramOrder = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"];
+            measurementTests.sort((a, b) => {
+                return paramOrder.indexOf(a.param) - paramOrder.indexOf(b.param);
+            });
+
             
             let html = '';
             
