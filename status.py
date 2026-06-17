@@ -4,6 +4,7 @@ import json
 import argparse
 import subprocess
 import time
+import threading
 import re
 from datetime import datetime
 
@@ -1855,7 +1856,15 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
             available_tests.append(test)
 
     if not available_tests:
-        print("\n[!] No test currently available (the test question corresponding to the next gate is not defined).")
+        print("\n[!] No exam currently available.")
+        print("    The following gates have no questions defined in status_tests.json:")
+        for _p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]:
+            _p_data = status.get(_p, {"current": 100})
+            _curr_val = _p_data.get("current", 100)
+            _next_gate = get_next_gate(_curr_val)
+            if _next_gate is not None and _next_gate > _curr_val:
+                print(f"      {_p}: current={_curr_val}, next gate={_next_gate}")
+        print("    Ask the GM to add questions for these gates.")
         return
 
     # Build tickets string
@@ -1871,7 +1880,8 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
     for idx, test in enumerate(available_tests, 1):
         param = test.get("param")
         target_gate = test.get("target_gate")
-        time_min = test.get("time_limit_seconds", 0) // 60
+        _limit_sec_display = test.get("time_limit_seconds", 0)
+        time_min = "No limit" if _limit_sec_display == 0 else f"{_limit_sec_display // 60} min"
         test_type = test.get("test_type", "gate")
         
         if test_type == "measurement":
@@ -1881,7 +1891,7 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
             t_status = " (Ticket Cost: 1 ticket)" if has_t else " [!] (Insufficient tickets, cannot challenge)"
             print(f"  [{idx}] [Gate Exam] {param} -> {target_gate} gate breakthrough exam{t_status}")
             
-        print(f"      (Difficulty: {test.get('difficulty')}, Time limit: {time_min} min)")
+        print(f"      (Difficulty: {test.get('difficulty')}, Time limit: {time_min})")
     print("----------------------------------------------------------------------")
     
     choice = input(" Enter the exam number to challenge (or 'q' to cancel): ").strip()
@@ -1914,13 +1924,14 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
             return
 
     print("\n======================================================================")
+    _time_banner = "No time limit (self-report exam)" if limit_sec == 0 else f"{limit_sec // 60} min ({limit_sec} sec)"
     if is_measurement:
         print(f" [Measurement] Starting {param} level {gate} practice exam now.")
-        print(f" Time limit: {limit_sec // 60} min ({limit_sec} sec)")
+        print(f" Time limit: {_time_banner}")
         print(" * Since this is a practice exam, no tickets will be consumed.")
     else:
         print(f" [Warning] Starting {param} level {gate} Gate Exam now.")
-        print(f" Time limit: {limit_sec // 60} min ({limit_sec} sec)")
+        print(f" Time limit: {_time_banner}")
         print(" Once started, the timer will begin and 1 ticket will be consumed.")
         print(" Please note that tickets will be consumed even if aborted.")
     print("======================================================================")
@@ -1942,22 +1953,55 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
             tickets["all"] -= 1
             consumed_type = "Universal ticket (all)"
 
-    save_json(os.path.join(base_path, f"status_{user_id}.json"), status_data, user_id)
+    filepath = os.path.join(base_path, f"status_{user_id}.json")
+    save_json(filepath, status_data, user_id)
     if is_measurement:
         print(f"\n[+] Starting practice exam (no ticket required).")
     else:
         print(f"\n[+] {consumed_type} consumed (1 ticket).")
     print("----------------------------------------------------------------------")
     print("[Question]")
-    print(selected_test.get("question"))
+    _q_text = selected_test.get("question", "")
+    print(_q_text.encode('utf-8', errors='replace').decode('utf-8'))
     print("----------------------------------------------------------------------")
     print(" * Once you finish your answer, type ':q' on a new line and press Enter.")
     print(" [Timer Started!]")
     print("----------------------------------------------------------------------")
 
     start_time = time.time()
+
+    # Start background warning timer thread for timed exams (P-2)
+    _stop_event = None
+    _timer_thread = None
+    if limit_sec > 0:
+        _exam_start_ref = [time.time()]  # Use list for mutable closure
+        _stop_event = threading.Event()
+        def _timer_warning(_limit, _stop, _ref):
+            _intervals = [(0.50, False), (0.25, True), (0.0, False)]
+            _warned = set()
+            while not _stop.is_set():
+                _elapsed_now = time.time() - _ref[0]
+                _remaining = _limit - _elapsed_now
+                _pct = _remaining / _limit if _limit > 0 else 1.0
+                for (_threshold, _is_warn) in _intervals:
+                    if _pct <= _threshold and _threshold not in _warned:
+                        _warned.add(_threshold)
+                        _mins, _secs = divmod(max(0, int(_remaining)), 60)
+                        if _threshold == 0.0:
+                            print(f"\n[Timer] TIME'S UP! Type ':q' and press Enter to submit.")
+                        else:
+                            _label = "WARNING: " if _is_warn else ""
+                            print(f"\n[Timer] {_label}{_mins}:{_secs:02d} remaining.")
+                _stop.wait(timeout=5)
+        _timer_thread = threading.Thread(
+            target=_timer_warning,
+            args=(limit_sec, _stop_event, _exam_start_ref),
+            daemon=True
+        )
+        _timer_thread.start()
     
     lines = []
+    _interrupted = False
     try:
         while True:
             line = input()
@@ -1966,12 +2010,58 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
             lines.append(line)
     except EOFError:
         pass
+    except KeyboardInterrupt:
+        _interrupted = True
 
     end_time = time.time()
     elapsed = end_time - start_time
     answer_text = "\n".join(lines)
 
-    timeout = elapsed > limit_sec
+    # Stop timer thread
+    if _stop_event is not None:
+        _stop_event.set()
+
+    # Handle keyboard interrupt: save draft locally without Firestore sync (P-4)
+    if _interrupted:
+        _draft_answer_text = "\n".join(lines) + "\n[DRAFT - exam interrupted by user]"
+        _draft_entry = {
+            "test_id": selected_test.get("id"),
+            "param": param,
+            "target_gate": gate,
+            "test_type": test_type,
+            "submitted_at": datetime.now().isoformat(),
+            "elapsed_seconds": round(elapsed, 1),
+            "time_limit_seconds": limit_sec,
+            "timeout": False if limit_sec == 0 else elapsed > limit_sec,
+            "is_draft": True,
+            "answer": _draft_answer_text
+        }
+        _pending = status_data.setdefault("pending_answers", [])
+        _pending.append(_draft_entry)
+        # Direct local atomic write -- do NOT call save_json() here.
+        # save_json() calls push_to_firestore() which does network I/O
+        # inside an interrupt context, risking hangs or upload corruption.
+        _tmp_path = filepath + ".tmp"
+        try:
+            with open(_tmp_path, 'w', encoding='utf-8') as _f:
+                json.dump(status_data, _f, ensure_ascii=False, indent=2)
+            os.replace(_tmp_path, filepath)
+        except Exception as _draft_err:
+            print(f"\n[!] Warning: Could not save draft: {_draft_err}")
+        finally:
+            if os.path.exists(_tmp_path):
+                try:
+                    os.remove(_tmp_path)
+                except Exception:
+                    pass
+        print("\n[!] Exam interrupted. Partial draft saved locally. Ticket has been consumed.")
+        print("======================================================================")
+        return
+
+    if limit_sec == 0:
+        timeout = False  # Untimed self-report exam -- never times out
+    else:
+        timeout = elapsed > limit_sec
     
     print("\n----------------------------------------------------------------------")
     print(f" Time elapsed: {elapsed:.1f} sec / Limit: {limit_sec} sec")
@@ -1999,9 +2089,10 @@ def run_test_mode(base_path, status_data, user_id="HG_pencil"):
     
     pending_answers = status_data.setdefault("pending_answers", [])
     pending_answers.append(new_answer)
-    save_json(os.path.join(base_path, f"status_{user_id}.json"), status_data, user_id)
+    save_json(filepath, status_data, user_id)
     
-    print("\n[+] Answer has been temporarily saved locally.")
+    _pending_count = len(status_data.get("pending_answers", []))
+    print(f"\n[+] Answer saved. Pending answers: {_pending_count}")
     print("    The GM will automatically grade it during your next chat with AI.")
     print("======================================================================")
 
