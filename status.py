@@ -413,6 +413,35 @@ def load_auth_config():
     env_password = os.environ.get("RPG_PASSWORD")
     env_uid = os.environ.get("RPG_UID")
     
+    # 2. If not fully set, try to load from project root .env file
+    if not (env_email and env_password):
+        env_path = os.path.join(get_base_path(), ".env")
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        stripped = line.strip()
+                        if not stripped or stripped.startswith("#"):
+                            continue
+                        if "=" in stripped:
+                            key, val = stripped.split("=", 1)
+                            key = key.strip()
+                            val = val.strip()
+                            # Strip outer quotes if they wrap the value
+                            if len(val) >= 2 and (
+                                (val.startswith('"') and val.endswith('"')) or
+                                (val.startswith("'") and val.endswith("'"))
+                            ):
+                                val = val[1:-1]
+                            if key == "RPG_EMAIL":
+                                env_email = val
+                            elif key == "RPG_PASSWORD":
+                                env_password = val
+                            elif key == "RPG_UID":
+                                env_uid = val
+            except Exception as e:
+                print(f"[!] Warning: Failed to read .env file: {e}")
+                
     if env_email and env_password:
         return {
             "email": env_email,
@@ -422,6 +451,7 @@ def load_auth_config():
         
     print("[!] Warning: Authentication environment variables (RPG_EMAIL, RPG_PASSWORD) are not set.")
     return None
+
 
 def get_auth_token(email, password):
     api_key = "AIzaSyA-65Hz0doOnYw8YcrUSvWHgs1Zi99eiLI"
