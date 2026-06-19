@@ -17,3 +17,5 @@ Thumbs.db
 config_auth.json
 private_key_*.pem
 config.json
+
+.env
