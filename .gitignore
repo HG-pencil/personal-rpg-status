@@ -19,3 +19,7 @@ private_key_*.pem
 config.json
 
 .env
+
+# Pending training stock data
+pending_training.json
+
