@@ -17,10 +17,69 @@
 - **新機能の実装・動作テストの成功**: `DEV +15`
 - **難解な設計・バグ解決、高度な対話**: `DEV +30`
 
-### 3. クラウドデータベース（Firestore）の更新プロトコル
-エージェントは、以下のいずれかの方法でステータスデータを更新してください。
+### 3. ステータス更新プロトコル（競合回避・推奨手順）
+他のプロジェクトを担当するエージェントがユーザーのトレーニング実績を追加する場合、ローカルの `status_HG_pencil.json` を直接編集（直接書き書き）すると、複数エージェント間での競合や不要なGitコミットが発生する原因となります。
 
-#### 💻 方法A：【推奨】直接 Firestore REST API を PATCH する（完全同期）
+これを避けるため、以下の **【推奨】ストック登録コマンド** を使用してトレーニングデータを保留（ストック）に追加してください。
+
+#### ⚡ 【推奨】ストック登録コマンドによる追加手順
+以下のコマンドを実行して、日次トレーニングデータをストックに登録します。
+```bash
+python status.py --stock-training '[JSON_STRING]'
+```
+または短縮形 `-s` を使用することも可能です。
+```bash
+python status.py -s '[JSON_STRING]'
+```
+実行が成功すると、標準出力に `[+] Stocked training data successfully.` と出力され、プロジェクトルートの `pending_training.json`（`.gitignore` で除外済み）にデータが蓄積されます。
+蓄積されたデータは、ユーザーまたは本プロジェクトのオーケストレーターが `python status.py --flush-training` を実行した際に一括適用されます。
+
+#### 📝 ストック登録用 JSON スキーマの解説
+引数に渡す `JSON_STRING` は、以下のスキーマに従った **オブジェクト（単一エントリ）** または **オブジェクトの配列（複数エントリ）** である必要があります。
+
+| フィールド名 | 型 | 必須 | 説明 |
+| :--- | :--- | :--- | :--- |
+| `date` | `string` | **必須** | トレーニング日（フォーマット: `YYYY-MM-DD`） |
+| `training` | `object` | 任意 | トレーニングポイント。`{"DEV": 15}` のようにパラメータと追加ポイントを指定します。対象パラメータ: `STR`, `VIT`, `INT`, `WIS`, `MND`, `CHA`, `DEV`。 |
+| `summary` | `string` | 任意 | トレーニング内容の簡潔なサマリー。 |
+
+**JSON の指定例（単一オブジェクト）:**
+```json
+{
+  "date": "2026-06-20",
+  "training": {
+    "DEV": 15
+  },
+  "summary": "Project [pdf-autorotate]: Implemented rotation logic"
+}
+```
+
+**JSON の指定例（複数オブジェクトの配列）:**
+```json
+[
+  {
+    "date": "2026-06-20",
+    "training": {
+      "DEV": 15
+    },
+    "summary": "Project [pdf-autorotate]: Implemented rotation logic"
+  },
+  {
+    "date": "2026-06-21",
+    "training": {
+      "DEV": 30
+    },
+    "summary": "Project [pdf-autorotate]: Resolved critical PDF memory leak"
+  }
+]
+```
+
+---
+
+#### 💻 その他の方法 (直接更新など)
+従来の方法として以下も利用可能ですが、Git競合防止のため上記コマンドの利用を推奨します。
+
+##### 💻 方法A：直接 Firestore REST API を PATCH する（完全同期）
 1. クラウドの最新データ（`https://firestore.googleapis.com/v1/projects/rpg-self-visualization-tool/databases/(default)/documents/users/{UID}`）から `GET` でデータを取得するか、ローカルの `status_HG_pencil.json` を読み込みます。
    - ※認証キーは `load_auth_config()` または OS環境変数 (`RPG_EMAIL` / `RPG_PASSWORD` / `RPG_UID`) を使用して動的にトークンを取得し、リクエストヘッダーに `Authorization: Bearer {token}` を付加します。
 2. 以下の査定加算・カウンター処理・履歴追記（後述）を行います。
@@ -40,9 +99,10 @@
      ```
 4. 同時に、ローカルのキャッシュファイル `status_HG_pencil.json`（マスキング前のオリジナル詳細）に同内容を上書き保存します。
 
-#### 📂 方法B：ローカルの `status_HG_pencil.json` を書き換えて同期する
+##### 📂 方法B：ローカルの `status_HG_pencil.json` を書き換えて同期する
 1. ローカルの `F:\Google Antigravity\projects\personal-rpg-status\status_HG_pencil.json` を通常通り読み書きして更新保存します。
 2. 保存完了後、`status.py` を実行（`python status.py`）するか、裏側で動作するアバター同期スクリプトなどの自動同期機構を介してクラウドと同期させます。
+
 
 ### 4. 加算時のデータ更新ルール（status_HG_pencil.jsonの内部仕様）
 エージェントはデータ書き換え時、必ず以下の値を更新してください。

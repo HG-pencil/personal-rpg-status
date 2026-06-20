@@ -2154,6 +2154,94 @@ def launch_web_server(base_path):
     except Exception as e:
         print(f"Failed to start web server in background: {e}")
 
+def stock_training_data(base_path, json_str):
+    if json_str == "-":
+        json_str = sys.stdin.read()
+    
+    try:
+        import_data = json.loads(json_str)
+        if not isinstance(import_data, list):
+            import_data = [import_data]
+    except Exception as e:
+        print(f"JSON parse error: {e}")
+        sys.exit(1)
+        
+    for entry in import_data:
+        if not isinstance(entry, dict):
+            print("[-] Error: Training data entry must be a JSON object.")
+            sys.exit(1)
+        if "date" not in entry:
+            print("[-] Error: Training data entry is missing 'date' field.")
+            sys.exit(1)
+        try:
+            datetime.strptime(entry["date"], "%Y-%m-%d")
+        except ValueError:
+            print("[-] Error: Date format must be YYYY-MM-DD.")
+            sys.exit(1)
+
+    pending_path = os.path.join(base_path, "pending_training.json")
+    existing_data = []
+    if os.path.exists(pending_path):
+        try:
+            with open(pending_path, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+                if not isinstance(existing_data, list):
+                    existing_data = []
+        except Exception:
+            existing_data = []
+
+    existing_data.extend(import_data)
+
+    draft_path = os.path.join(base_path, "pending_training_draft.json")
+    try:
+        with open(draft_path, "w", encoding="utf-8") as f:
+            json.dump(existing_data, f, ensure_ascii=False, indent=2)
+        with open(draft_path, "r", encoding="utf-8") as f:
+            json.load(f)
+        if os.path.exists(pending_path):
+            os.remove(pending_path)
+        os.rename(draft_path, pending_path)
+    except Exception as e:
+        if os.path.exists(draft_path):
+            try:
+                os.remove(draft_path)
+            except Exception:
+                pass
+        print(f"[-] Error writing pending training data: {e}")
+        sys.exit(1)
+
+    print("[+] Stocked training data successfully.")
+
+
+def flush_training_data(base_path, data, user_id):
+    pending_path = os.path.join(base_path, "pending_training.json")
+    if not os.path.exists(pending_path):
+        print("[-] Error: No pending training data found to flush.")
+        sys.exit(1)
+
+    try:
+        with open(pending_path, "r", encoding="utf-8") as f:
+            pending_data = json.load(f)
+    except Exception as e:
+        print(f"[-] Error reading pending training data: {e}")
+        sys.exit(1)
+
+    if not isinstance(pending_data, list) or not pending_data:
+        print("[-] Warning: Pending training data is empty or invalid.")
+        sys.exit(0)
+
+    json_str = json.dumps(pending_data, ensure_ascii=False)
+    
+    import_training_data(base_path, data, json_str, user_id)
+
+    try:
+        os.remove(pending_path)
+    except Exception as e:
+        print(f"[-] Warning: Failed to delete pending_training.json: {e}")
+
+    print("[+] Flushed stocked training data successfully.")
+
+
 def main():
     # Load and verify private key
     try:
@@ -2168,6 +2256,8 @@ def main():
     parser.add_argument("--test", "-t", action="store_true", help="Launch the rank gate exam mode")
     parser.add_argument("--web", "-w", action="store_true", help="Open the local web dashboard in browser")
     parser.add_argument("--import-training", "-p", type=str, help="Import training data (JSON string format)")
+    parser.add_argument("--stock-training", "-s", type=str, help="Stock training data (JSON string format)")
+    parser.add_argument("--flush-training", "-f", action="store_true", help="Flush stocked training data to status")
     parser.add_argument("--user", "-u", type=str, default="HG_pencil", help="User ID for status data (default: HG_pencil)")
     args = parser.parse_args()
     
@@ -2177,7 +2267,11 @@ def main():
     
     data = load_status(filepath, user_id)
     
-    if args.import_training:
+    if args.stock_training:
+        stock_training_data(base_path, args.stock_training)
+    elif args.flush_training:
+        flush_training_data(base_path, data, user_id)
+    elif args.import_training:
         import_training_data(base_path, data, args.import_training, user_id)
     elif args.test:
         run_test_mode(base_path, data, user_id)
