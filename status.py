@@ -602,7 +602,7 @@ def merge_status_data(cloud, local, base):
         key = f"{lh.get('date')}_{lh.get('event')}"
         if key not in cloud_events:
             merged.setdefault("history", []).append(lh)
-    merged["history"].sort(key=lambda x: x.get("date", ""))
+    merged.setdefault("history", []).sort(key=lambda x: x.get("date", ""))
     
     # 4. Merge quests (reflect completed ones from local)
     if "quests" in local:
@@ -633,13 +633,25 @@ def merge_status_data(cloud, local, base):
         if ans.get("test_id") not in cloud_pending_ids:
             merged.setdefault("pending_answers", []).append(ans)
             
-    # 7. Use the higher value for status (current/peak)
+    # 7. Use the latest measurement for status (current), keep peak as max
     for p in params:
         cloud_p = cloud.get("status", {}).get(p, {"current": 100, "peak": 100})
         local_p = local.get("status", {}).get(p, {"current": 100, "peak": 100})
+        
+        cloud_t = cloud_p.get("last_measured_at", "2026-06-21T00:00:00")
+        local_t = local_p.get("last_measured_at", "2026-06-21T00:00:00")
+        
+        if local_t > cloud_t:
+            current_val = local_p.get("current", 100)
+            chosen_t = local_t
+        else:
+            current_val = cloud_p.get("current", 100)
+            chosen_t = cloud_t
+            
         merged.setdefault("status", {})[p] = {
-            "current": max(cloud_p.get("current", 100), local_p.get("current", 100)),
+            "current": current_val,
             "peak": max(cloud_p.get("peak", 100), local_p.get("peak", 100)),
+            "last_measured_at": chosen_t,
             "last_measured": cloud_p.get("last_measured") or local_p.get("last_measured")
         }
         
@@ -650,6 +662,13 @@ def merge_status_data(cloud, local, base):
         "current": min(cloud_hp.get("current", 100), local_hp.get("current", 100)),
         "max": cloud_hp.get("max", 100)
     }
+    
+    # 8. Recalculate combat power
+    total_cp = 0
+    for p in params:
+        p_val = merged.get("status", {}).get(p, {}).get("current", 100)
+        total_cp += p_val
+    merged["combat_power"] = total_cp
     
     return merged
 
@@ -759,6 +778,14 @@ def migrate_data(data):
             if word not in parts:
                 parts.append(word)
                 
+    # Initialize status last_measured_at field
+    params = ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]
+    status_dict = data.setdefault("status", {})
+    for p in params:
+        p_data = status_dict.setdefault(p, {"current": 100, "peak": 100})
+        if "last_measured_at" not in p_data:
+            p_data["last_measured_at"] = "2026-06-21T00:00:00"
+            
     return data
 
 KEY_CACHE = {}

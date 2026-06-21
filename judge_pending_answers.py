@@ -126,12 +126,29 @@ def main():
         print(decrypted_answer)
         print("----------------------------------------------------------------------")
 
+        # Determine test type
+        test_type = ans.get("test_type") or test_meta.get("test_type", "gate")
+        is_measurement = (test_type == "measurement")
+
         # Grading input
-        while True:
-            judge = input(" Enter grade (y: Pass / n: Fail / s: Skip): ").strip().lower()
-            if judge in ['y', 'n', 's']:
-                break
-            print(" [!] Please enter 'y', 'n', or 's'.")
+        if is_measurement:
+            while True:
+                judge = input(" Enter score (0-100 or s: Skip): ").strip().lower()
+                if judge == 's':
+                    break
+                try:
+                    score = int(judge)
+                    if 0 <= score <= 100:
+                        break
+                except ValueError:
+                    pass
+                print(" [!] Please enter an integer between 0 and 100, or 's' to skip.")
+        else:
+            while True:
+                judge = input(" Enter grade (y: Pass / n: Fail / s: Skip): ").strip().lower()
+                if judge in ['y', 'n', 's']:
+                    break
+                print(" [!] Please enter 'y', 'n', or 's'.")
 
         if judge == 's':
             print(" -> Skipped grading for this answer. Retaining pending status.")
@@ -140,11 +157,57 @@ def main():
 
         feedback = input(" Enter feedback comment: ").strip()
         if not feedback:
-            feedback = "Passed the criteria." if judge == 'y' else "Please try again."
+            if is_measurement:
+                feedback = f"Measured with score {score}."
+            else:
+                feedback = "Passed the criteria." if judge == 'y' else "Please try again."
 
         processed_any = True
 
-        if judge == 'y':
+        if is_measurement:
+            # Linear grading calculation
+            new_current = target_gate + int(score * 0.99)
+            print(f" -> [Measurement] Calculated new current value for {param} as {new_current} (score: {score}).")
+
+            # Update status parameters
+            status_dict = data.setdefault("status", {})
+            param_status = status_dict.setdefault(param, {"current": 100, "peak": 100})
+            
+            old_current = param_status.get("current", 100)
+            old_peak = param_status.get("peak", 100)
+            
+            param_status["current"] = new_current
+            param_status["peak"] = max(old_peak, new_current)
+            param_status["last_measured"] = datetime.now().strftime("%Y-%m-%d")
+            param_status["last_measured_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+            # Recalculate total combat power
+            combat_power = 0
+            for p in ["STR", "VIT", "INT", "WIS", "MND", "CHA", "DEV"]:
+                p_val = status_dict.get(p, {}).get("current", 100)
+                combat_power += p_val
+            data["combat_power"] = combat_power
+            print(f" -> Recalculated total combat power: {combat_power}")
+
+            # Add event to history
+            history = data.setdefault("history", [])
+            history.append({
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "event": f"Measurement Rated: {test_id} ({param} rated to {new_current}! Score: {score})",
+                "status_change": {},
+                "summary": feedback
+            })
+
+            # Automatically evaluate achievements/titles
+            newly_unlocked_ach = status.check_achievements(base_path, data)
+            newly_unlocked_titles = status.check_titles(base_path, data)
+
+            if newly_unlocked_ach:
+                print(f" [Achievement Unlocked] Achieved: {[a['name'] for a in newly_unlocked_ach]}")
+            if newly_unlocked_titles:
+                print(f" [Title Unlocked] Acquired titles: {[t['name'] for t in newly_unlocked_titles]}")
+
+        elif judge == 'y':
             print(f" -> [Pass] Unleashing {param} current value to {target_gate}.")
             
             # Update status parameters
@@ -157,6 +220,7 @@ def main():
             param_status["current"] = target_gate
             param_status["peak"] = max(old_peak, target_gate)
             param_status["last_measured"] = datetime.now().strftime("%Y-%m-%d")
+            param_status["last_measured_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
             # Recalculate total combat power
             combat_power = 0
