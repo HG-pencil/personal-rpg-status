@@ -1551,12 +1551,11 @@ function startTest(testId, testType) {
             // ボタンの切り替え
             const submitBtn = document.getElementById('test-submit-btn');
             if (submitBtn) {
+                submitBtn.disabled = false;
                 if (testId.startsWith("TRAIN-")) {
                     submitBtn.innerText = "コードを実行してテスト判定";
-                    submitBtn.setAttribute("onclick", "judgeTrainingCode()");
                 } else {
                     submitBtn.innerText = isMeasurement ? "測定の解答を提出する" : "解答を提出する";
-                    submitBtn.setAttribute("onclick", "submitTestAnswer()");
                 }
             }
             
@@ -1723,6 +1722,10 @@ async function encryptAnswer(plainText, keyVersion = "v1") {
 
 // 通常の試験提出 (Firestoreへの書き込み)
 async function submitTestAnswer(isTimeout = false) {
+    if (activeTest && activeTest.id && activeTest.id.startsWith("TRAIN-")) {
+        return judgeTrainingCode();
+    }
+    
     if (testTimerInterval) clearInterval(testTimerInterval);
     
     const textarea = document.getElementById('test-answer-input');
@@ -1839,7 +1842,7 @@ async function submitTestAnswer(isTimeout = false) {
         if (textarea) textarea.disabled = false;
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.innerText = "解答を提出する";
+            submitBtn.innerText = isMeasurement ? "測定の解答を提出する" : "解答を提出する";
         }
     });
 }
