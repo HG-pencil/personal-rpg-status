@@ -628,10 +628,34 @@ def merge_status_data(cloud, local, base):
         merged["archetypes"] = list(local.get("archetypes", []))
         
     # 6. Merge pending_answers
+    merged_pending = []
+    local_pending_dict = {ans.get("test_id"): ans for ans in local.get("pending_answers", [])}
+    
+    for cloud_ans in cloud.get("pending_answers", []):
+        test_id = cloud_ans.get("test_id")
+        local_ans = local_pending_dict.get(test_id)
+        
+        # If cloud answer is masked but local answer is encrypted, restore the encrypted local answer
+        if local_ans and cloud_ans.get("answer") == "[\u8a18\u8ff0\u56de\u7b54\u306f\u30ed\u30fc\u30ab\u30eb\u306b\u306e\u307f\u4fdd\u5b58\u3055\u308c\u3066\u3044\u307e\u3059]":
+            local_val = local_ans.get("answer")
+            is_encrypted = False
+            if isinstance(local_val, dict) and "key_version" in local_val:
+                is_encrypted = True
+            elif isinstance(local_val, str) and "key_version" in local_val:
+                is_encrypted = True
+                
+            if is_encrypted:
+                cloud_ans["answer"] = local_val
+                print(f"[*] Restored encrypted answer for {test_id} from local cache during merge.")
+        
+        merged_pending.append(cloud_ans)
+        
     cloud_pending_ids = {ans.get("test_id") for ans in cloud.get("pending_answers", [])}
     for ans in local.get("pending_answers", []):
         if ans.get("test_id") not in cloud_pending_ids:
-            merged.setdefault("pending_answers", []).append(ans)
+            merged_pending.append(ans)
+            
+    merged["pending_answers"] = merged_pending
             
     # 7. Use the latest measurement for status (current), keep peak as max
     for p in params:

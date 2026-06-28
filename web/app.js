@@ -599,13 +599,34 @@ function mergeStatusData(cloud, local, base) {
     }
     
     // 6. pending_answers のマージ
+    const mergedPending = [];
+    const localPendingMap = new Map((local.pending_answers || []).map(ans => [ans.test_id, ans]));
+    
+    (cloud.pending_answers || []).forEach(cloudAns => {
+        const localAns = localPendingMap.get(cloudAns.test_id);
+        if (localAns && cloudAns.answer === "[記述回答はローカルにのみ保存されています]") {
+            const localVal = localAns.answer;
+            let isEncrypted = false;
+            if (typeof localVal === 'object' && localVal !== null && 'key_version' in localVal) {
+                isEncrypted = true;
+            } else if (typeof localVal === 'string' && localVal.includes('key_version')) {
+                isEncrypted = true;
+            }
+            if (isEncrypted) {
+                cloudAns.answer = localVal;
+                console.log(`[*] Restored encrypted answer for ${cloudAns.test_id} from local cache during merge.`);
+            }
+        }
+        mergedPending.push(cloudAns);
+    });
+    
     const cloudPendingIds = new Set((cloud.pending_answers || []).map(ans => ans.test_id));
     (local.pending_answers || []).forEach(ans => {
         if (!cloudPendingIds.has(ans.test_id)) {
-            merged.pending_answers = merged.pending_answers || [];
-            merged.pending_answers.push(ans);
+            mergedPending.push(ans);
         }
     });
+    merged.pending_answers = mergedPending;
     
     // 7. statusの値（current/peak）は高い方を採用
     params.forEach(p => {
